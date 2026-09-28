@@ -1,0 +1,15 @@
+# Was NICHT zu Cloud Build hochgeladen wird. Wichtig: .env (Secrets kommen aus dem Secret Manager).
+.gcloudignore
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+/.venv/
+/daten/
+/tests/
+/docs/
+/evals/
+**/__pycache__/
+*.pyc
+.pytest_cache/

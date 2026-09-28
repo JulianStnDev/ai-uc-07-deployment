@@ -67,3 +67,11 @@ Entscheidung: Startseite mit „So funktioniert diese Demo“ (drei Schritte) un
 **Die Zeitleiste zeigt nur, was der Agent gesehen und geschlossen hat, keine Deutungen der Oberfläche.** Beispiel: Bei den Zahlungen steht „5 Zahlungen gefunden“ plus Liste, nicht „darunter zweimal 54,34 USD“. Begründung: Hebt die Oberfläche etwas hervor, sieht es so aus, als hätte der Agent es erkannt. Das würde seine Leistung in der Demo besser aussehen lassen, als sie ist, und die Bewertung durch den Menschen in der Konsole beeinflussen. Schlüsse des Agents stehen in seinen eigenen Notizen und in seiner Empfehlung, die die Zeitleiste wörtlich wiedergibt.
 
 Titel eines Anliegens: das Label des Beispiel-Chips, wenn der Text unverändert ist, sonst die ersten Wörter. Kein LLM, damit ein Titel nichts kostet und nichts hinzudichtet.
+
+## 2026-09-28: Budgetalarm per gcloud, Projekt-ID, Dienstkonten
+
+Budgetalarm: In der Console ließ er sich nicht anlegen, per `gcloud billing budgets create` klappte es beim ersten Versuch, ohne Quota-Projekt und ohne zusätzliche Rechte. An Rechten lag es also nicht (Billing-Admin auf dem Konto, Owner im Projekt). Wahrscheinlichste Ursache, nicht verifiziert: Es gibt zwei Billing-Konten mit demselben Namen „Mein Rechnungskonto“. Nur eines davon (`010944-…`) ist mit dem Projekt verbunden. Wählt die Console das andere, taucht das Projekt im Budget-Filter nicht auf. Das Budget lautet auf 5 EUR, weil das Konto in EUR abrechnet.
+
+Projekt-ID: „focusflow-demo“ ist der Anzeigename, die ID lautet `focusflow-demo-510014`. gcloud braucht die ID.
+
+Dienstkonten: Cloud Run läuft unter einem eigenen Konto `uc7-run`, das nur die vier Secrets lesen darf. Das Standardkonto hätte Editor-Rechte auf das ganze Projekt. Die Secrets sind auf feste Versionen gepinnt.
