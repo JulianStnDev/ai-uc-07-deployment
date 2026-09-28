@@ -1,0 +1,230 @@
+{
+  "referenztag": "2026-09-24",
+  "kunden": [
+    {
+      "kunden_id": "K001",
+      "name": "Anna Berger",
+      "email": "anna.berger@example.com",
+      "login": "email_passwort",
+      "plattform": "web",
+      "kunde_seit": "2026-07-04",
+      "abo": {
+        "stufe": "pro_jaehrlich",
+        "anbieter": "stripe",
+        "status": "aktiv",
+        "periode_start": "2026-09-14",
+        "periode_ende": "2027-09-14"
+      }
+    },
+    {
+      "kunden_id": "K002",
+      "name": "Ben Hoffmann",
+      "email": "ben.hoffmann@example.com",
+      "login": "email_passwort",
+      "plattform": "web",
+      "kunde_seit": "2026-05-03",
+      "abo": {
+        "stufe": "pro_monatlich",
+        "anbieter": "stripe",
+        "status": "aktiv",
+        "periode_start": "2026-09-03",
+        "periode_ende": "2026-10-03"
+      }
+    },
+    {
+      "kunden_id": "K003",
+      "name": "Clara Neumann",
+      "email": "clara.neumann@gmail.com",
+      "login": "google",
+      "plattform": "web",
+      "kunde_seit": "2026-02-11",
+      "abo": {
+        "stufe": "pro_jaehrlich",
+        "anbieter": "stripe",
+        "status": "aktiv",
+        "periode_start": "2026-09-18",
+        "periode_ende": "2027-09-18"
+      }
+    },
+    {
+      "kunden_id": "K004",
+      "name": "David Schulz",
+      "email": "david.schulz@example.com",
+      "login": "email_passwort",
+      "plattform": "web",
+      "kunde_seit": "2025-11-20",
+      "abo": {
+        "stufe": "pro_jaehrlich",
+        "anbieter": "stripe",
+        "status": "aktiv",
+        "periode_start": "2026-08-15",
+        "periode_ende": "2027-08-15"
+      }
+    },
+    {
+      "kunden_id": "K005",
+      "name": "Emma Wagner",
+      "email": "emma.wagner@example.com",
+      "login": "email_passwort",
+      "plattform": "ios",
+      "kunde_seit": "2026-06-02",
+      "abo": {
+        "stufe": "pro_jaehrlich",
+        "anbieter": "apple",
+        "status": "aktiv",
+        "periode_start": "2026-09-20",
+        "periode_ende": "2027-09-20"
+      }
+    },
+    {
+      "kunden_id": "K006",
+      "name": "Felix Braun",
+      "email": "felix.braun@example.com",
+      "login": "email_passwort",
+      "plattform": "web",
+      "kunde_seit": "2026-04-12",
+      "abo": {
+        "stufe": "pro_monatlich",
+        "anbieter": "stripe",
+        "status": "aktiv",
+        "periode_start": "2026-09-12",
+        "periode_ende": "2026-10-12"
+      }
+    },
+    {
+      "kunden_id": "K007",
+      "name": "Felix Braun",
+      "email": "felix.braun@gmail.com",
+      "login": "google",
+      "plattform": "android",
+      "kunde_seit": "2026-07-28",
+      "abo": {
+        "stufe": "pro_monatlich",
+        "anbieter": "google",
+        "status": "aktiv",
+        "periode_start": "2026-09-01",
+        "periode_ende": "2026-10-01"
+      }
+    },
+    {
+      "kunden_id": "K008",
+      "name": "Greta Koch",
+      "email": "greta.koch@gmail.com",
+      "login": "google",
+      "plattform": "android",
+      "kunde_seit": "2026-01-17",
+      "abo": {
+        "stufe": "free",
+        "anbieter": null,
+        "status": null,
+        "periode_start": null,
+        "periode_ende": null
+      }
+    },
+    {
+      "kunden_id": "K009",
+      "name": "Hannah Fischer",
+      "email": "hannah.fischer@example.com",
+      "login": "email_passwort",
+      "plattform": "ios",
+      "kunde_seit": "2026-08-30",
+      "abo": {
+        "stufe": "free",
+        "anbieter": null,
+        "status": null,
+        "periode_start": null,
+        "periode_ende": null
+      }
+    },
+    {
+      "kunden_id": "K010",
+      "name": "Jonas Meyer",
+      "email": "jonas.meyer@gmail.com",
+      "login": "google",
+      "plattform": "android",
+      "kunde_seit": "2026-05-09",
+      "abo": {
+        "stufe": "pro_monatlich",
+        "anbieter": "google",
+        "status": "aktiv",
+        "periode_start": "2026-09-21",
+        "periode_ende": "2026-10-21"
+      }
+    },
+    {
+      "kunden_id": "K011",
+      "name": "Lena Schmidt",
+      "email": "lena.schmidt@example.com",
+      "login": "email_passwort",
+      "plattform": "web",
+      "kunde_seit": "2025-09-15",
+      "abo": {
+        "stufe": "pro_jaehrlich",
+        "anbieter": "stripe",
+        "status": "aktiv",
+        "periode_start": "2026-09-15",
+        "periode_ende": "2027-09-15"
+      }
+    },
+    {
+      "kunden_id": "K012",
+      "name": "Max Wolf",
+      "email": "max.wolf@example.com",
+      "login": "email_passwort",
+      "plattform": "web",
+      "kunde_seit": "2026-01-08",
+      "abo": {
+        "stufe": "pro_monatlich",
+        "anbieter": "stripe",
+        "status": "aktiv",
+        "periode_start": "2026-09-08",
+        "periode_ende": "2026-10-08"
+      }
+    },
+    {
+      "kunden_id": "K013",
+      "name": "Nora Klein",
+      "email": "nora.klein@example.com",
+      "login": "email_passwort",
+      "plattform": "web",
+      "kunde_seit": "2026-06-05",
+      "abo": {
+        "stufe": "pro_monatlich",
+        "anbieter": "stripe",
+        "status": "gekuendigt",
+        "periode_start": "2026-09-05",
+        "periode_ende": "2026-10-05"
+      }
+    },
+    {
+      "kunden_id": "K014",
+      "name": "Paul Richter",
+      "email": "paul.richter@example.com",
+      "login": "email_passwort",
+      "plattform": "web",
+      "kunde_seit": "2025-03-01",
+      "abo": {
+        "stufe": "free",
+        "anbieter": null,
+        "status": null,
+        "periode_start": null,
+        "periode_ende": null
+      }
+    },
+    {
+      "kunden_id": "K015",
+      "name": "Sofia Lang",
+      "email": "sofia.lang@gmail.com",
+      "login": "google",
+      "plattform": "android",
+      "kunde_seit": "2026-03-02",
+      "abo": {
+        "stufe": "pro_jaehrlich",
+        "anbieter": "google",
+        "status": "aktiv",
+        "periode_start": "2026-03-02",
+        "periode_ende": "2027-03-02"
+      }
+    }
+  ]
+}

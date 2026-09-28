@@ -1,6 +1,11 @@
 {
-  "title": "",
-  "status": "planned",
-  "tags": [],
-  "summary": ""
+  "title": "Deployment: Support-Agent als Web-Demo",
+  "status": "active",
+  "tags": [
+    "deployment",
+    "agents",
+    "cloud-run",
+    "sse"
+  ],
+  "summary": "UC4-Support-Agent als Web-Demo mit Zugangscode, Live-Anzeige der Werkzeugaufrufe, Freigabe-Seite für Erstattungen und hartem Monatsbudget von 5 USD"
 }

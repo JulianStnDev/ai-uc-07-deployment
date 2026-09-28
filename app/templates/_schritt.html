@@ -1,0 +1,11 @@
+{% if e.art == "text" %}
+<li class="schritt text"><span class="etikett">Agent</span> {{ e.text }}</li>
+{% else %}
+<li class="schritt werkzeug{% if s.fehler %} fehler{% endif %}">
+  <span class="etikett">{{ s.titel }}</span>
+  {% if s.blockiert %}<span class="marke rot">blockiert</span>{% elif s.fehler %}<span class="marke rot">Fehler</span>{% endif %}
+  <code class="eingabe">{{ s.eingabe_kurz }}</code>
+  <ul>{% for z in s.zeilen %}<li>{{ z }}</li>{% endfor %}</ul>
+  <details><summary>Ein- und Ausgabe</summary><pre>{{ s.roh }}</pre></details>
+</li>
+{% endif %}

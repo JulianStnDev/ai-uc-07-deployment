@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block titel %}Anmelden{% endblock %}
+{% block navigation %}{% endblock %}
+{% block inhalt %}
+<section class="karte schmal">
+  <h1>Zugangscode</h1>
+  <p>Diese Demo ist nicht öffentlich. Bitte den Zugangscode eingeben, den du bekommen hast.</p>
+  {% if fehler %}<p class="meldung fehler">{{ fehler }}</p>{% endif %}
+  <form method="post" action="/login">
+    <label for="code">Code</label>
+    <input id="code" name="code" type="password" autocomplete="current-password" required autofocus>
+    <button type="submit">Weiter</button>
+  </form>
+</section>
+{% endblock %}

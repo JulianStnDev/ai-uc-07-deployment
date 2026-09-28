@@ -45,3 +45,15 @@ Begründung: Die spannende Demo ist ein eigenes Anliegen. Der feste Absender hä
 Kontext: Harte Grenze 5 USD API-Kosten im Monat, in der App erzwungen. `ResultMessage.total_cost_usd` ist laut Anthropic-Doku eine clientseitige Schätzung, keine Abrechnung.
 
 Entscheidung: Vor jedem Lauf wird gerechnet: Summe der Laufkosten im Kalendermonat (UTC) plus 0,50 USD Reserve je gerade laufendem Lauf. Liegt das bei 4,50 USD oder darüber, startet kein Lauf, der Besucher sieht eine freundliche Abschaltmeldung. Da ein Lauf höchstens 0,50 USD kosten darf (`max_budget_usd`), bleibt der Monat unter 5,00 USD. Läufe ohne Kostenangabe (Abbruch, Fehler, Neustart der App mitten im Lauf) werden mit 0,50 USD verbucht, also zu hoch statt zu niedrig. Dritte Sicherung ist ein Budgetalarm in Google Cloud, den der Projektinhaber selbst einrichtet (Anleitung in docs/plan.md).
+
+## 2026-09-28: Ticket läuft als Hintergrund-Task, Browser hört per SSE zu
+
+Kontext: Ein Ticket dauert 25–45 s. Die Seite soll jeden Werkzeugaufruf live zeigen. Schließt jemand den Tab oder bricht die Verbindung ab, dürfen weder Kosten noch Empfehlungen verloren gehen.
+
+Optionen: (a) Agent läuft direkt im SSE-Request, (b) POST startet einen asyncio-Task, der Browser liest per SSE mit, (c) Warteschlange mit eigenem Worker.
+
+Entscheidung: (b). Der Task meldet jedes Ereignis an einen Beobachter. Beliebig viele SSE-Verbindungen lesen mit, nach einem Abbruch setzt der Browser per `Last-Event-ID` fort. Das Ergebnis wird immer protokolliert, auch ohne Zuschauer. SSE statt WebSocket, weil der Datenfluss nur in eine Richtung geht und SSE ein normaler HTTP-Request ist.
+
+Folge für Branch (b): Cloud Run teilt CPU standardmäßig nur während aktiver Requests zu. Solange die Seite offen ist, hält der SSE-Request die Instanz aktiv. Schließt der Besucher den Tab mitten im Lauf, kann der Task gedrosselt werden. In (b) prüfen, ob „instance-based billing" nötig ist oder der Lauf an den Request gebunden werden soll.
+
+Umsetzung Agent: Der UC4-Code ist nach `uc4_agent/` kopiert, einzige Änderung ist die herausgelöste Funktion `baue_optionen`. Die Web-App nutzt sie unverändert (per Test abgesichert). Der Werkzeugkasten wird nur um eine Meldung je Aufruf erweitert (Unterklasse `WebKasten`), die Werkzeuge selbst bleiben gleich.
