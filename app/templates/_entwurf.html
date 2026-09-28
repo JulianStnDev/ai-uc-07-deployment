@@ -1,0 +1,7 @@
+<div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support · Antwortentwurf {{ info("entwurf", "Antwortentwurf") }}</div>
+{% if ergebnis.entwurf %}
+<div class="entwurf-hinweis" role="note"><span aria-hidden="true">✎</span><span><strong>Entwurf.</strong> Wird vor dem Versand von einem Menschen geprüft.</span></div>
+<div class="nachricht support">{{ ergebnis.entwurf }}</div>
+{% else %}
+<p class="leise">Es gibt keinen Antwortentwurf. Ein Mitarbeiter meldet sich persönlich.</p>
+{% endif %}

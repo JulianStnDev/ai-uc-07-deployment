@@ -1,24 +1,41 @@
 {% extends "base.html" %}
-{% block titel %}Lauf {{ lauf.run_id }}{% endblock %}
+{% block titel %}{{ titel }}{% endblock %}
 {% block inhalt %}
-<h1>Ticket von {{ kunden[lauf.kunden_id].name }}</h1>
-<section class="karte ticket">
-  <p class="dezent">Von: {{ lauf.absender }} · {{ lauf.erstellt | datum }} UTC · Lauf {{ lauf.run_id }}</p>
-  <blockquote>{{ lauf.text }}</blockquote>
-</section>
-
-<h2>Was der Agent tut</h2>
-{% if live %}
-<div hx-ext="sse" sse-connect="/lauf/{{ lauf.run_id }}/stream" sse-close="ende">
-  <ol class="schritte" sse-swap="schritt" hx-swap="beforeend"></ol>
-  <div sse-swap="ergebnis">
-    <p class="arbeitet"><span class="punkt"></span> Agent arbeitet … (typisch 25 bis 40 Sekunden)</p>
-  </div>
+{% set kunde = kunden[lauf.kunden_id] %}
+{% set namen = kunde.name.split() %}
+<div class="kopfzeile-seite">
+  <div><p class="ueberzeile">Anliegen · {{ lauf.erstellt | datum }} UTC</p><h1>{{ titel }}</h1></div>
+  <a class="knopf zweit" href="/anliegen">Neues Anliegen</a>
 </div>
-{% else %}
-<ol class="schritte">
-  {% for html in schritte_html %}{{ html | safe }}{% endfor %}
-</ol>
-{% if ergebnis_html %}{{ ergebnis_html | safe }}{% else %}<p class="meldung fehler">Für diesen Lauf gibt es kein Ergebnis.</p>{% endif %}
-{% endif %}
+<div class="geteilt" {% if live %}hx-ext="sse" sse-connect="/lauf/{{ lauf.run_id }}/stream" sse-close="ende"{% endif %}>
+  <section class="karte portal" aria-labelledby="portal-titel">
+    <div class="spalte-kopf"><h2 class="ueberzeile" id="portal-titel">Kundenportal</h2><span class="sehr-leise">so sieht es der Kunde</span></div>
+    <a class="sprung nur-handy" href="#kulisse-titel">↓ Hinter den Kulissen: Schritte des Agents</a>
+    <div class="kunde-zeile"><span class="avatar" aria-hidden="true">{{ namen[0][0] }}{{ namen[-1][0] }}</span>
+      <div><strong>{{ kunde.name }}</strong><div class="sehr-leise">{{ lauf.absender }} · {{ kunde | abo }}</div></div>
+      {{ info("absender", "Absender", true) }}</div>
+    <div class="nachricht-kopf" style="justify-content: flex-end;">{{ kunde.name.split()[0] }} · {{ lauf.erstellt[11:16] }} UTC</div>
+    <div class="nachricht kunde">{{ lauf.text }}</div>
+    {% if live %}
+    <div sse-swap="entwurf" aria-live="polite">
+      <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support</div>
+      <p class="leise"><span class="punkt-klein" aria-hidden="true"></span> Der Support bearbeitet dein Anliegen …</p>
+    </div>
+    {% else %}{{ teile.entwurf | safe if teile }}{% endif %}
+  </section>
+  <section class="karte kulisse" aria-labelledby="kulisse-titel">
+    <div class="spalte-kopf"><h2 class="ueberzeile" id="kulisse-titel">Hinter den Kulissen</h2>
+      {% if live %}<span sse-swap="status"><span class="badge neutral">läuft</span></span>{% else %}{{ teile.status | safe if teile }}{% endif %}
+      {{ info("werkzeug", "Schritte des Agents", true) }}</div>
+    <ol class="zeitleiste" {% if live %}sse-swap="schritt" hx-swap="beforeend"{% endif %}>
+      {% for html in schritte_html %}{{ html | safe }}{% endfor %}
+    </ol>
+    {% if live %}
+    <div sse-swap="abschluss">
+      <ol class="zeitleiste"><li class="ereignis aktiv"><span class="punkt" aria-hidden="true">…</span>
+        <div class="ereignis-titel">Agent arbeitet</div><div class="ereignis-text">Typisch 25 bis 40 Sekunden.</div></li></ol>
+    </div>
+    {% elif teile %}{{ teile.abschluss | safe }}{% else %}<p class="meldung fehler">Für diesen Lauf gibt es kein Ergebnis.</p>{% endif %}
+  </section>
+</div>
 {% endblock %}

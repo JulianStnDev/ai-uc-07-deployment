@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block titel %}Start{% endblock %}
+{% block inhalt %}
+<section class="held">
+  <p class="ueberzeile">So funktioniert diese Demo</p>
+  <h1>Ein KI-Agent im Kundensupport, zum Ausprobieren</h1>
+  <p>FocusFlow ist eine erfundene Habit-Tracker-App. Ihr Support wird von einem KI-Agent unterstützt, der Konten nachschlägt, Regeln liest und Antworten vorbereitet. Was er darf und was nicht, ist fest geregelt.</p>
+</section>
+{% if budget.gesperrt %}
+<p class="meldung" role="status">Das Demo-Budget für diesen Monat ist aufgebraucht. Neue Anliegen gehen ab dem {{ budget.naechster_monat }} wieder, die Support-Konsole bleibt offen.</p>
+{% endif %}
+<ol class="schritte3">
+  <li class="karte schritt3"><div class="nr" aria-hidden="true">1</div><h2 class="h3">Du schreibst als Kunde</h2>
+    <p>Wähle einen erfundenen Kunden und beschreibe ein Anliegen, etwa eine doppelte Abbuchung oder eine Kündigung.</p></li>
+  <li class="karte schritt3"><div class="nr" aria-hidden="true">2</div><h2 class="h3">Der Agent arbeitet</h2>
+    <p>Du siehst live, welche Schritte er macht: Konto prüfen, Zahlungen ansehen, Hilfe lesen. Nach etwa 30 Sekunden steht ein Antwortentwurf.</p></li>
+  <li class="karte schritt3"><div class="nr" aria-hidden="true">3</div><h2 class="h3">Ein Mensch entscheidet</h2>
+    <p>Geld zurückzahlen darf der Agent nicht. Er empfiehlt, und in der Support-Konsole bestätigt oder lehnt ein Mensch ab.</p></li>
+</ol>
+<div class="wege">
+  <a class="karte weg" href="/anliegen"><span class="symbol" aria-hidden="true">✉️</span>
+    <h2>Als Kunde ein Anliegen stellen</h2><p>Schreib dem Support und schau dem Agent dabei über die Schulter.</p>
+    <span class="los">Anliegen stellen →</span></a>
+  <a class="karte weg" href="/freigaben"><span class="symbol" aria-hidden="true">🧑‍💼</span>
+    <h2>Support-Konsole (Freigaben)</h2><p>Sieh dir als Mitarbeiter an, welche Erstattungen der Agent empfohlen hat, und entscheide selbst.</p>
+    <span class="los">Zur Konsole{% if offene_freigaben %} · {{ offene_freigaben }} offen{% endif %} →</span></a>
+</div>
+{% endblock %}

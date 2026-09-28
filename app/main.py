@@ -2,9 +2,10 @@
 
 Seiten:
     /login              Zugangscode eingeben
-    /                   Kunde wählen + Anliegen schreiben (oder Abschaltmeldung, wenn Budget aufgebraucht)
-    /lauf/{id}          Live-Anzeige der Werkzeugaufrufe (SSE über /lauf/{id}/stream), am Ende Ergebnis
-    /freigaben          Offene Erstattungsempfehlungen bestätigen oder ablehnen
+    /                   Start: "So funktioniert diese Demo" und zwei Wege
+    /anliegen           Kundenportal: Kunde wählen + Anliegen schreiben (oder Pause, wenn Budget aufgebraucht)
+    /lauf/{id}          Links Kundenportal mit Antwortentwurf, rechts "Hinter den Kulissen" live per SSE
+    /freigaben          Support-Konsole: Erstattungsempfehlungen bestätigen oder ablehnen, Übergaben
 
 Start lokal:  uvicorn --factory app.main:create_app --reload   (Einstellungen: app/einstellungen.py, .env.example)
 """
@@ -26,7 +27,7 @@ from fastapi.templating import Jinja2Templates
 
 from uc4_agent.werkzeuge import DATA_DIR, ROOT as UC4_ROOT
 
-from . import budget, darstellung, zugang
+from . import budget, darstellung, hinweise, zugang
 from .einstellungen import Einstellungen, aus_umgebung
 from .lauf import BEOBACHTER, Beobachter, QueryFn, _sdk_query, lauf_ausfuehren
 from .speicher import Speicher
@@ -41,9 +42,10 @@ OFFENE_PFADE = ("/login", "/health", "/static/")
 HIER = Path(__file__).parent
 KUNDEN = {k["kunden_id"]: k for k in json.loads((DATA_DIR / "kunden.json").read_text(encoding="utf-8"))["kunden"]}
 ZAHLUNGEN = {z["zahlungs_id"]: z for z in json.loads((DATA_DIR / "zahlungen.json").read_text(encoding="utf-8"))["zahlungen"]}
-BEISPIELE = [{"id": t["id"], "kunden_id": t["kunde_id"], "text": t["text"]}
+BEISPIELE = [{"id": t["id"], "kunden_id": t["kunde_id"], "text": t["text"], "label": hinweise.BEISPIEL_LABELS[t["id"]]}
              for t in json.loads((UC4_ROOT / "evals" / "aufgaben.json").read_text(encoding="utf-8"))["aufgaben"]
              if t.get("kunde_id") in KUNDEN]
+BEISPIEL_TEXTE = {b["id"]: b["text"] for b in BEISPIELE}
 
 
 def neue_run_id() -> str:
@@ -73,11 +75,14 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
     app.state.laufende_tasks = laufende_tasks
     app.mount("/static", StaticFiles(directory=HIER / "static"), name="static")
     templates = Jinja2Templates(directory=HIER / "templates")
-    templates.env.filters.update(usd=darstellung.usd, usd_genau=darstellung.usd_genau, datum=darstellung.datum)
+    templates.env.filters.update(usd=darstellung.usd, usd_genau=darstellung.usd_genau, datum=darstellung.datum,
+                                 abo=darstellung.abo_text)
+    templates.env.globals.update(info=hinweise.info)
 
     def seite(request: Request, name: str, status_code: int = 200, **ctx) -> HTMLResponse:
         ctx.setdefault("budget", budget.stand(speicher, cfg.monatsdeckel_usd))
         ctx.setdefault("offene_freigaben", len(speicher.offene_empfehlungen()))
+        ctx.setdefault("aktiv", None)
         return templates.TemplateResponse(request, name, {"kunden": KUNDEN, "zahlungen": ZAHLUNGEN, **ctx},
                                           status_code=status_code)
 
@@ -120,39 +125,43 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
         antwort.delete_cookie(zugang.COOKIE_NAME)
         return antwort
 
-    # ---------- Ticket anlegen ----------
-
-    def formular(request: Request, fehler: str | None = None, kunden_id: str = "", text: str = "", status_code: int = 200):
-        stand = budget.stand(speicher, cfg.monatsdeckel_usd)
-        if stand.gesperrt:
-            return seite(request, "gesperrt.html", status_code=503 if status_code != 200 else 200, budget=stand)
-        return seite(request, "index.html", status_code=status_code, budget=stand, fehler=fehler,
-                     kunden_id=kunden_id, text=text, beispiele=BEISPIELE, max_zeichen=MAX_TEXT_ZEICHEN,
-                     laeuft_gerade=speicher.laufende_anzahl())
+    # ---------- Start und Anliegen ----------
 
     @app.get("/", response_class=HTMLResponse)
     async def startseite(request: Request):
+        return seite(request, "start.html", aktiv="start")
+
+    def formular(request: Request, fehler: str | None = None, kunden_id: str = "", text: str = "",
+                 beispiel: str = "", status_code: int = 200):
+        stand = budget.stand(speicher, cfg.monatsdeckel_usd)
+        return seite(request, "anliegen.html", status_code=status_code, aktiv="anliegen", budget=stand,
+                     fehler=fehler, kunden_id=kunden_id, text=text, beispiel=beispiel, beispiele=BEISPIELE,
+                     max_zeichen=MAX_TEXT_ZEICHEN, laeuft_gerade=speicher.laufende_anzahl())
+
+    @app.get("/anliegen", response_class=HTMLResponse)
+    async def anliegen(request: Request):
         return formular(request)
 
     @app.post("/lauf")
-    async def lauf_starten(request: Request, kunden_id: str = Form(""), text: str = Form("")):
+    async def lauf_starten(request: Request, kunden_id: str = Form(""), text: str = Form(""), beispiel: str = Form("")):
         text = text.strip()
         if kunden_id not in KUNDEN:
-            return formular(request, "Bitte einen Kunden aus der Liste wählen.", kunden_id, text, 400)
+            return formular(request, "Bitte einen Kunden aus der Liste wählen.", kunden_id, text, beispiel, 400)
         if not text:
-            return formular(request, "Bitte ein Anliegen eingeben.", kunden_id, text, 400)
+            return formular(request, "Bitte ein Anliegen eingeben.", kunden_id, text, beispiel, 400)
         if len(text) > MAX_TEXT_ZEICHEN:
             return formular(request, f"Das Anliegen ist zu lang ({len(text)} Zeichen, erlaubt sind {MAX_TEXT_ZEICHEN}).",
-                            kunden_id, text[:MAX_TEXT_ZEICHEN], 400)
+                            kunden_id, text[:MAX_TEXT_ZEICHEN], beispiel, 400)
         # Zwischen Prüfung und Anlegen gibt es kein await: Zwei gleichzeitige Anfragen können sich hier nicht überholen.
         if budget.stand(speicher, cfg.monatsdeckel_usd).gesperrt:
             return formular(request, status_code=503)
         if speicher.laufende_anzahl() >= cfg.max_parallele_laeufe:
-            return formular(request, "Gerade bearbeitet der Agent schon ein anderes Ticket. Bitte in einer halben Minute noch einmal versuchen.",
-                            kunden_id, text, 429)
+            return formular(request, "Gerade bearbeitet der Agent schon ein anderes Anliegen. Bitte in einer halben Minute noch einmal versuchen.",
+                            kunden_id, text, beispiel, 429)
         run_id = neue_run_id()
         absender = KUNDEN[kunden_id]["email"]  # Absender kommt immer aus dem gewählten Kunden, nie aus dem Formular
-        speicher.lauf_anlegen(run_id, kunden_id, absender, text)
+        titel = hinweise.titel_fuer(text, beispiel, BEISPIEL_TEXTE)
+        speicher.lauf_anlegen(run_id, kunden_id, absender, text, titel)
         beobachter = Beobachter()
         BEOBACHTER[run_id] = beobachter
         task = asyncio.create_task(lauf_ausfuehren(run_id, absender, text, speicher, cfg.lauf_dir, beobachter, query_fn))
@@ -162,12 +171,15 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
 
     # ---------- Lauf ansehen ----------
 
-    def schritt_html(e: dict) -> str:
-        return fragment("_schritt.html", e=e, s=darstellung.schritt(e) if e["art"] == "werkzeug" else None)
+    def schritt_html(ereignisse: list[dict], i: int) -> str:
+        e = ereignisse[i]
+        erste_notiz = e["art"] == "text" and not any(x["art"] == "text" for x in ereignisse[:i])
+        return fragment("_schritt.html", s=darstellung.schritt(e, erste_notiz))
 
-    def ergebnis_html(run_id: str, ergebnis: dict) -> str:
-        return fragment("_ergebnis.html", run_id=run_id, ergebnis=ergebnis,
-                        empfehlungen=speicher.empfehlungen_zum_lauf(run_id))
+    def abschluss_html(run_id: str, ergebnis: dict) -> dict[str, str]:
+        """Am Ende gibt es drei Teile: Status-Badge (rechts oben), Antwortentwurf (links), Abschluss (rechts)."""
+        ctx = {"run_id": run_id, "ergebnis": ergebnis, "empfehlungen": speicher.empfehlungen_zum_lauf(run_id)}
+        return {name: fragment(f"_{name}.html", **ctx) for name in ("status", "entwurf", "abschluss")}
 
     @app.get("/lauf/{run_id}", response_class=HTMLResponse)
     async def lauf_seite(request: Request, run_id: str):
@@ -175,9 +187,10 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
         if lauf is None:
             return seite(request, "nicht_gefunden.html", status_code=404)
         live = lauf["status"] == "laeuft"
-        return seite(request, "lauf.html", lauf=lauf, live=live,
-                     schritte_html=[] if live else [schritt_html(e) for e in lauf["ereignisse"]],
-                     ergebnis_html=None if live or not lauf["ergebnis"] else ergebnis_html(run_id, lauf["ergebnis"]))
+        teile = abschluss_html(run_id, lauf["ergebnis"]) if not live and lauf["ergebnis"] else None
+        return seite(request, "lauf.html", aktiv="anliegen", lauf=lauf, live=live, teile=teile,
+                     titel=lauf["titel"] or hinweise.titel_fuer(lauf["text"], None, {}),
+                     schritte_html=[] if live else [schritt_html(lauf["ereignisse"], i) for i in range(len(lauf["ereignisse"]))])
 
     @app.get("/lauf/{run_id}/stream")
     async def lauf_stream(request: Request, run_id: str):
@@ -189,12 +202,17 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
         except ValueError:
             ab = 0
 
+        def abschluss_nachrichten(ergebnis: dict, i: int | None):
+            for name, html in abschluss_html(run_id, ergebnis).items():
+                yield darstellung.sse_nachricht(name, html, i)
+
         async def ereignisse():
             b = BEOBACHTER.get(run_id)
             if b is None:  # Lauf ist nicht (mehr) in diesem Prozess: Stand aus dem Speicher zeigen
                 lauf = speicher.lauf(run_id)
                 if lauf["ergebnis"]:
-                    yield darstellung.sse_nachricht("ergebnis", ergebnis_html(run_id, lauf["ergebnis"]))
+                    for n in abschluss_nachrichten(lauf["ergebnis"], None):
+                        yield n
                 yield darstellung.sse_nachricht("ende", "")
                 return
             i = ab
@@ -202,9 +220,10 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
                 while i < len(b.ereignisse):
                     e = b.ereignisse[i]
                     if e["art"] == "ergebnis":
-                        yield darstellung.sse_nachricht("ergebnis", ergebnis_html(run_id, e["ergebnis"]), i)
+                        for n in abschluss_nachrichten(e["ergebnis"], i):
+                            yield n
                     else:
-                        yield darstellung.sse_nachricht("schritt", schritt_html(e), i)
+                        yield darstellung.sse_nachricht("schritt", schritt_html(b.ereignisse, i), i)
                     i += 1
                 if b.fertig:
                     yield darstellung.sse_nachricht("ende", "")
@@ -221,9 +240,9 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
 
     @app.get("/freigaben", response_class=HTMLResponse)
     async def freigaben(request: Request, hinweis: str | None = None):
-        return seite(request, "freigaben.html", offen=speicher.offene_empfehlungen(),
+        return seite(request, "konsole.html", aktiv="konsole", offen=speicher.offene_empfehlungen(),
                      entschieden=speicher.entschiedene_empfehlungen(), statistik=speicher.freigabe_statistik(),
-                     hinweis=hinweis)
+                     uebergaben=speicher.uebergaben(), hinweis=hinweis)
 
     @app.post("/freigaben/{empfehlungs_id}")
     async def entscheiden(empfehlungs_id: str, entscheidung: str = Form(""), kommentar: str = Form("")):

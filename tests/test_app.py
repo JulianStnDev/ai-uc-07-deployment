@@ -206,19 +206,22 @@ def test_sse_liefert_schritte_ergebnis_und_ende(client):
     run_id = starte(client)
     warte_bis_fertig(client, run_id)
     ev = sse_ereignisse(client, run_id)
-    assert [e["event"] for e in ev] == ["schritt"] * 5 + ["ergebnis", "ende"]
-    assert "Ich schaue mir das Konto an." in ev[0]["data"]
-    assert "Kunde nachschlagen" in ev[1]["data"] and "Anna Berger" in ev[1]["data"]
-    assert "54,34 USD" in ev[3]["data"]
-    assert "Antwortentwurf" in ev[5]["data"] and "wartet auf Freigabe" in ev[5]["data"]
-    assert [e.get("id") for e in ev[:6]] == list(range(6))
+    assert [e["event"] for e in ev] == ["schritt"] * 5 + ["status", "entwurf", "abschluss", "ende"]
+    assert "Ich schaue mir das Konto an." in ev[0]["data"] and "Notiz des Agents" in ev[0]["data"]
+    assert "Sucht das Kundenkonto" in ev[1]["data"] and "Konto gefunden: Anna Berger" in ev[1]["data"]
+    assert "54,34 USD" in ev[3]["data"] and "wartet auf Freigabe" in ev[3]["data"]
+    assert "fertig" in ev[5]["data"]
+    assert "Entwurf." in ev[6]["data"] and "Hallo Anna" in ev[6]["data"]
+    assert "Fertig" in ev[7]["data"] and "0,03 USD" in ev[7]["data"] and "zur Support-Konsole" in ev[7]["data"]
+    # Alle drei Abschluss-Teile tragen die ID des Ergebnis-Ereignisses (5)
+    assert [e.get("id") for e in ev[:8]] == [0, 1, 2, 3, 4, 5, 5, 5]
 
 
 def test_sse_setzt_nach_verbindungsabbruch_fort(client):
     run_id = starte(client)
     warte_bis_fertig(client, run_id)
     ev = sse_ereignisse(client, run_id, headers={"Last-Event-ID": "3"})
-    assert [e.get("id") for e in ev[:-1]] == [4, 5]
+    assert [e.get("id") for e in ev[:-1]] == [4, 5, 5, 5]
 
 
 def test_lauf_seite_nach_ende_ohne_sse_und_escaped(client):
@@ -259,7 +262,7 @@ def test_ohne_api_key_wird_lauf_zum_fehler(tmp_path, monkeypatch):
 def test_nur_ein_lauf_gleichzeitig(client):
     client.app.state.speicher.lauf_anlegen("20260928-000000-aaaaaa", "K001", "a@example.com", "läuft noch")
     r = client.post("/lauf", data={"kunden_id": "K002", "text": "Hallo"})
-    assert r.status_code == 429 and "anderes Ticket" in r.text
+    assert r.status_code == 429 and "anderes Anliegen" in r.text
 
 
 def test_verwaiste_laeufe_beim_start_pauschal_verbucht(tmp_path):
@@ -275,9 +278,10 @@ def test_freigabe_bestaetigen_nur_einmal(client):
     warte_bis_fertig(client, starte(client))
     eid = client.app.state.speicher.offene_empfehlungen()[0]["empfehlungs_id"]
     r = client.get("/freigaben")
-    assert "Offen (1)" in r.text and "Echte Doppelabbuchung" in r.text and "Z005" in r.text
+    assert "Echte Doppelabbuchung" in r.text and "Z005" in r.text and 'class="badge offen">offen<' in r.text
     r = client.post(f"/freigaben/{eid}", data={"entscheidung": "bestaetigt", "kommentar": " passt "})
-    assert "Entscheidung gespeichert" in r.text and "Offen (0)" in r.text
+    assert "Entscheidung gespeichert" in r.text and "Keine offenen Empfehlungen" in r.text
+    assert 'class="badge bestaetigt">bestätigt<' in r.text and "100 %" in r.text
     r = client.post(f"/freigaben/{eid}", data={"entscheidung": "abgelehnt"})
     assert "schon entschieden" in r.text
     s = client.app.state.speicher
@@ -289,7 +293,7 @@ def test_freigabe_bestaetigen_nur_einmal(client):
 def test_freigabe_ungueltig_und_unbekannt(client):
     warte_bis_fertig(client, starte(client))
     eid = client.app.state.speicher.offene_empfehlungen()[0]["empfehlungs_id"]
-    assert "Bestätigen" in client.post(f"/freigaben/{eid}", data={"entscheidung": "vielleicht"}).text
+    assert "Bitte „Bestätigen“ oder „Ablehnen“ wählen" in client.post(f"/freigaben/{eid}", data={"entscheidung": "vielleicht"}).text
     assert "schon entschieden" in client.post("/freigaben/E-gibtsnicht", data={"entscheidung": "abgelehnt"}).text
     assert len(client.app.state.speicher.offene_empfehlungen()) == 1
 
@@ -305,8 +309,9 @@ def lauf_mit_kosten(speicher, run_id, kosten, erstellt=None, status="fertig"):
 
 def test_budget_gesperrt_zeigt_abschaltmeldung(client, aufrufe):
     lauf_mit_kosten(client.app.state.speicher, "20260928-000000-000001", 4.50)
-    r = client.get("/")
+    r = client.get("/anliegen")
     assert "macht Pause" in r.text and "01." in r.text and "<textarea" not in r.text
+    assert "Demo-Budget für diesen Monat ist aufgebraucht" in client.get("/").text
     r = client.post("/lauf", data={"kunden_id": "K001", "text": "Hallo"})
     assert r.status_code == 503 and "macht Pause" in r.text
     assert aufrufe == []
