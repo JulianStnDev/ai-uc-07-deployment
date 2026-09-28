@@ -38,6 +38,7 @@ def speicher():
 def test_ablauf_komplett_auf_postgres(speicher):
     assert speicher.art == "postgres"
     speicher.lauf_anlegen("r1", "K001", "anna.berger@example.com", "doppelt", "Titel")
+    assert speicher.lauf_uebernehmen("r1") is True and speicher.lauf_uebernehmen("r1") is False
     assert speicher.laufende_anzahl() == 1
     monat = datetime.now(timezone.utc).strftime("%Y-%m")
     assert speicher.laufende_im_monat(monat) == 1 and speicher.kosten_im_monat(monat) == 0
@@ -61,7 +62,7 @@ def test_ablauf_komplett_auf_postgres(speicher):
 
 def test_verwaist_nur_alte_laeufe(speicher):
     alt = datetime.now(timezone.utc) - timedelta(minutes=20)
-    speicher.lauf_anlegen("alt", "K001", "a@example.com", "x", jetzt=alt)
-    speicher.lauf_anlegen("neu", "K001", "a@example.com", "x")
+    speicher.lauf_anlegen("alt", "K001", "a@example.com", "x", jetzt=alt, status="laeuft")
+    speicher.lauf_anlegen("neu", "K001", "a@example.com", "x", status="laeuft")
     assert speicher.verwaiste_laeufe_abbrechen(0.5) == 1
     assert speicher.lauf("alt")["status"] == "abgebrochen" and speicher.lauf("neu")["status"] == "laeuft"

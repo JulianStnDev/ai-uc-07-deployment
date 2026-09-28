@@ -37,6 +37,7 @@ log = logging.getLogger("uc7")
 
 MAX_TEXT_ZEICHEN = 1000
 SSE_PING_S = 15
+POLL_S = 3  # Abfrage-Intervall, wenn ein Lauf auf einer anderen Instanz läuft
 RUN_ID_MUSTER = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$")
 OFFENE_PFADE = ("/login", "/health", "/static/")
 
@@ -59,6 +60,9 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
     cfg = einstellungen or aus_umgebung()
     speicher = Speicher(cfg.db_pfad, cfg.database_url)
     laufende_tasks: set[asyncio.Task] = set()
+    # Höchstens N Agent-Läufe gleichzeitig pro Instanz (Anthropic: 1 GiB/1 CPU je Lauf). Seiten, Konsole und
+    # Live-Anzeige laufen daneben weiter, weil Cloud Run mehrere Anfragen je Instanz zulässt (--concurrency).
+    agent_platz = asyncio.Semaphore(cfg.agent_laeufe_pro_instanz)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -76,6 +80,7 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
     app.state.speicher = speicher
     app.state.einstellungen = cfg
     app.state.laufende_tasks = laufende_tasks
+    app.state.agent_platz = agent_platz
     app.mount("/static", StaticFiles(directory=HIER / "static"), name="static")
     templates = Jinja2Templates(directory=HIER / "templates")
     templates.env.filters.update(usd=darstellung.usd, usd_genau=darstellung.usd_genau, datum=darstellung.datum,
@@ -181,12 +186,9 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
         run_id = neue_run_id()
         absender = KUNDEN[kunden_id]["email"]  # Absender kommt immer aus dem gewählten Kunden, nie aus dem Formular
         titel = hinweise.titel_fuer(text, beispiel, BEISPIEL_TEXTE)
+        # Nur anlegen. Gestartet wird der Lauf von der SSE-Anfrage der Laufseite (lauf_stream): So läuft der
+        # Agent garantiert auf der Instanz, mit der der Browser verbunden ist, auch bei mehreren Instanzen.
         speicher.lauf_anlegen(run_id, kunden_id, absender, text, titel)
-        beobachter = Beobachter()
-        BEOBACHTER[run_id] = beobachter
-        task = asyncio.create_task(lauf_ausfuehren(run_id, absender, text, speicher, cfg.lauf_dir, beobachter, query_fn))
-        laufende_tasks.add(task)
-        task.add_done_callback(laufende_tasks.discard)
         return RedirectResponse(f"/lauf/{run_id}", status_code=303)
 
     # ---------- Lauf ansehen ----------
@@ -206,7 +208,7 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
         lauf = speicher.lauf(run_id) if RUN_ID_MUSTER.match(run_id) else None
         if lauf is None:
             return seite(request, "nicht_gefunden.html", status_code=404)
-        live = lauf["status"] == "laeuft"
+        live = lauf["status"] in ("angelegt", "laeuft")
         teile = abschluss_html(run_id, lauf["ergebnis"]) if not live and lauf["ergebnis"] else None
         return seite(request, "lauf.html", aktiv="anliegen", lauf=lauf, live=live, teile=teile,
                      titel=lauf["titel"] or hinweise.titel_fuer(lauf["text"], None, {}),
@@ -226,10 +228,53 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
             for name, html in abschluss_html(run_id, ergebnis).items():
                 yield darstellung.sse_nachricht(name, html, i)
 
+        def verfallen(grund: str) -> None:
+            ergebnis = {"status": "verfallen", "fehlertext": grund, "subtype": None, "num_turns": None, "schlusstext": None,
+                        "entwurf": None, "empfehlungen": [], "uebergaben": [], "kuendigungen": [], "eingriffe": 0,
+                        "pflichten_offen": [], "kosten_usd": 0.0, "kosten_pauschal": False, "dauer_s": 0.0}
+            speicher.lauf_abschliessen(run_id, status="verfallen", kosten_usd=0.0, kosten_pauschal=False, dauer_s=0.0,
+                                       ergebnis=ergebnis, ereignisse=[], empfehlungen=[])
+
+        async def starten() -> Beobachter | None:
+            """Wartet auf einen freien Agent-Platz dieser Instanz und übernimmt den Lauf. None, wenn eine andere
+            Anfrage schneller war. Der Lauf ist ein eigener Task: Schließt der Besucher den Tab, läuft er zu Ende
+            (Cloud Run mit Abrechnung pro Instanz, --no-cpu-throttling)."""
+            await asyncio.wait_for(agent_platz.acquire(), cfg.agent_wartezeit_s)
+            if not speicher.lauf_uebernehmen(run_id):
+                agent_platz.release()
+                return None
+            lauf = speicher.lauf(run_id)
+            b = Beobachter()
+            BEOBACHTER[run_id] = b
+            task = asyncio.create_task(lauf_ausfuehren(run_id, lauf["absender"], lauf["text"], speicher, cfg.lauf_dir, b, query_fn))
+            laufende_tasks.add(task)
+            task.add_done_callback(laufende_tasks.discard)
+            task.add_done_callback(lambda _t: agent_platz.release())  # Platz erst nach dem Lauf freigeben, nicht beim Tab-Schließen
+            return b
+
         async def ereignisse():
             b = BEOBACHTER.get(run_id)
-            if b is None:  # Lauf ist nicht (mehr) in diesem Prozess: Stand aus dem Speicher zeigen
-                lauf = speicher.lauf(run_id)
+            if b is None and speicher.lauf(run_id)["status"] == "angelegt":
+                if agent_platz.locked():
+                    yield darstellung.sse_nachricht("schritt", fragment("_warten.html"))
+                try:
+                    b = await starten()
+                except TimeoutError:
+                    verfallen("Gerade ist viel los: Der Agent war die ganze Zeit mit anderen Anliegen beschäftigt. "
+                              "Bitte versuch es gleich noch einmal, es wurde nichts berechnet.")
+                except asyncio.CancelledError:  # Tab geschlossen, bevor ein Platz frei wurde
+                    verfallen("Die Seite wurde geschlossen, bevor der Agent starten konnte. Es wurde nichts berechnet.")
+                    raise
+            if b is None:
+                # Lauf ist fertig, läuft auf einer anderen Instanz oder wurde von einer anderen Anfrage gestartet:
+                # im Speicher nachsehen, bis er abgeschlossen ist.
+                while (lauf := speicher.lauf(run_id))["status"] in ("angelegt", "laeuft"):
+                    if await request.is_disconnected():
+                        return
+                    yield ": warte\n\n"
+                    await asyncio.sleep(POLL_S)
+                for i in range(len(lauf["ereignisse"])):
+                    yield darstellung.sse_nachricht("schritt", schritt_html(lauf["ereignisse"], i))
                 if lauf["ergebnis"]:
                     for n in abschluss_nachrichten(lauf["ergebnis"], None):
                         yield n
@@ -237,6 +282,7 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
                 return
             i = ab
             while True:
+                signal = b.signal()  # vor dem Prüfen holen (siehe Beobachter.signal)
                 while i < len(b.ereignisse):
                     e = b.ereignisse[i]
                     if e["art"] == "ergebnis":
@@ -250,7 +296,7 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
                     return
                 if await request.is_disconnected():
                     return
-                if not await b.warten(SSE_PING_S):
+                if not await b.warten(SSE_PING_S, signal):
                     yield ": ping\n\n"  # Kommentarzeile hält Proxys und Browser bei langen Pausen wach
 
         return StreamingResponse(ereignisse(), media_type="text/event-stream",

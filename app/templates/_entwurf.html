@@ -3,5 +3,6 @@
 <div class="entwurf-hinweis" role="note"><span aria-hidden="true">✎</span><span><strong>Entwurf.</strong> Wird vor dem Versand von einem Menschen geprüft.</span></div>
 <div class="nachricht support">{{ ergebnis.entwurf }}</div>
 {% else %}
-<p class="leise">Es gibt keinen Antwortentwurf. Ein Mitarbeiter meldet sich persönlich.</p>
+{% if ergebnis.status == "verfallen" %}<p class="leise">Dein Anliegen wurde noch nicht bearbeitet. <a href="/anliegen">Noch einmal versuchen</a></p>
+{% else %}<p class="leise">Es gibt keinen Antwortentwurf. Ein Mitarbeiter meldet sich persönlich.</p>{% endif %}
 {% endif %}

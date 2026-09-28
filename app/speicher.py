@@ -21,7 +21,7 @@ SCHEMA = [
         absender        TEXT NOT NULL,
         text            TEXT NOT NULL,
         titel           TEXT,                       -- Chip-Label oder erste Wörter (kein LLM)
-        status          TEXT NOT NULL,              -- laeuft | fertig | fehler | abgebrochen
+        status          TEXT NOT NULL,              -- angelegt | laeuft | fertig | fehler | abgebrochen | verfallen
         kosten_usd      DOUBLE PRECISION,           -- SDK-Schätzung oder Pauschale
         kosten_pauschal INTEGER NOT NULL DEFAULT 0, -- 1 = keine Kostenangabe, Deckel verbucht
         dauer_s         DOUBLE PRECISION,
@@ -47,6 +47,8 @@ SCHEMA = [
 
 # Ein Lauf dauert typisch 30–45 s. Was nach 15 min noch "läuft", hat keinen Prozess mehr.
 VERWAIST_NACH = timedelta(minutes=15)
+# "angelegt" = POST ist durch, der Lauf startet erst, wenn die Seite per SSE zuhört (siehe main.py).
+OFFEN = ("angelegt", "laeuft")
 
 
 def jetzt_iso(jetzt: datetime | None = None) -> str:
@@ -129,10 +131,16 @@ class Speicher:
     # ---------- Läufe ----------
 
     def lauf_anlegen(self, run_id: str, kunden_id: str, absender: str, text: str, titel: str | None = None,
-                     jetzt: datetime | None = None) -> None:
+                     jetzt: datetime | None = None, status: str = "angelegt") -> None:
         with self.backend.verbindung() as x:
-            x("INSERT INTO laeufe (run_id, erstellt, kunden_id, absender, text, titel, status) VALUES (?, ?, ?, ?, ?, ?, 'laeuft')",
-              (run_id, jetzt_iso(jetzt), kunden_id, absender, text, titel))
+            x("INSERT INTO laeufe (run_id, erstellt, kunden_id, absender, text, titel, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+              (run_id, jetzt_iso(jetzt), kunden_id, absender, text, titel, status))
+
+    def lauf_uebernehmen(self, run_id: str) -> bool:
+        """Genau eine Anfrage darf einen angelegten Lauf starten, auch bei mehreren Instanzen.
+        Das UPDATE mit Bedingung ist atomar: Die zweite Anfrage findet keine Zeile mehr."""
+        with self.backend.verbindung() as x:
+            return x("UPDATE laeufe SET status='laeuft' WHERE run_id=? AND status='angelegt'", (run_id,)).rowcount == 1
 
     def lauf_abschliessen(self, run_id: str, *, status: str, kosten_usd: float, kosten_pauschal: bool,
                           dauer_s: float, ergebnis: dict, ereignisse: list, empfehlungen: list[dict]) -> None:
@@ -154,28 +162,32 @@ class Speicher:
         return d
 
     def laufende_anzahl(self) -> int:
-        return self._eins("SELECT COUNT(*) AS n FROM laeufe WHERE status='laeuft'")["n"]
+        """Angelegte und laufende Läufe (beide belegen einen Platz)."""
+        return self._eins("SELECT COUNT(*) AS n FROM laeufe WHERE status IN (?, ?)", OFFEN)["n"]
 
     def verwaiste_laeufe_abbrechen(self, pauschale_usd: float, jetzt: datetime | None = None) -> int:
-        """Läufe, die länger als VERWAIST_NACH "laufen", hatten keinen Abschluss (Neustart, Absturz).
-        Sie werden mit der Pauschale verbucht, lieber zu hoch als zu niedrig. Jüngere Läufe bleiben
-        unberührt, denn sie können gerade auf einer anderen Instanz laufen."""
+        """Aufräumen beim Start einer Instanz, nur für Läufe älter als VERWAIST_NACH (jüngere können gerade
+        auf einer anderen Instanz laufen):
+        - "läuft" ohne Abschluss (Neustart, Absturz): Pauschale verbuchen, lieber zu hoch als zu niedrig.
+        - "angelegt", aber nie gestartet (Seite geschlossen, bevor sie zuhörte): verfallen, kostet nichts."""
         grenze = jetzt_iso((jetzt or datetime.now(timezone.utc)) - VERWAIST_NACH)
         with self.backend.verbindung() as x:
-            cur = x("UPDATE laeufe SET status='abgebrochen', kosten_usd=?, kosten_pauschal=1 WHERE status='laeuft' AND erstellt < ?",
-                    (pauschale_usd, grenze))
-            return cur.rowcount
+            n = x("UPDATE laeufe SET status='abgebrochen', kosten_usd=?, kosten_pauschal=1 WHERE status='laeuft' AND erstellt < ?",
+                  (pauschale_usd, grenze)).rowcount
+            n += x("UPDATE laeufe SET status='verfallen', kosten_usd=0 WHERE status='angelegt' AND erstellt < ?", (grenze,)).rowcount
+            return n
 
     # ---------- Budget ----------
 
     def kosten_im_monat(self, monat: str) -> float:
         """monat im Format 'YYYY-MM' (UTC). Summe aller abgeschlossenen Läufe."""
         return float(self._eins(
-            "SELECT COALESCE(SUM(kosten_usd), 0) AS s FROM laeufe WHERE substr(erstellt, 1, 7)=? AND status != 'laeuft'",
-            (monat,))["s"])
+            "SELECT COALESCE(SUM(kosten_usd), 0) AS s FROM laeufe WHERE substr(erstellt, 1, 7)=? AND status NOT IN (?, ?)",
+            (monat, *OFFEN))["s"])
 
     def laufende_im_monat(self, monat: str) -> int:
-        return self._eins("SELECT COUNT(*) AS n FROM laeufe WHERE substr(erstellt, 1, 7)=? AND status='laeuft'", (monat,))["n"]
+        return self._eins("SELECT COUNT(*) AS n FROM laeufe WHERE substr(erstellt, 1, 7)=? AND status IN (?, ?)",
+                          (monat, *OFFEN))["n"]
 
     # ---------- Empfehlungen und Freigaben ----------
 
