@@ -8,6 +8,7 @@
     <div class="ereignis-titel">Nicht alles erledigt</div>
     <div class="ereignis-text">Offen geblieben: {{ ergebnis.pflichten_offen | join(", ") }}</div></li>
   {% endif %}
+  {% if ergebnis.status != "verfallen" %}
   <li class="ereignis fertig"><span class="punkt" aria-hidden="true">✓</span>
     <div class="ereignis-titel">{{ "Fertig" if ergebnis.status == "fertig" else "Beendet" }}</div>
     <dl class="kennzahlen">
@@ -18,6 +19,7 @@
     {% if ergebnis.kosten_pauschal %}<p class="sehr-leise">Kosten als Pauschale verbucht, weil das SDK keine Angabe geliefert hat.</p>{% endif %}
     {% if ergebnis.eingriffe %}<p class="sehr-leise" style="margin-top: 6px;">Der Programmcode hat den Agent {{ ergebnis.eingriffe }}× an eine Pflicht erinnert. {{ info("erinnerung", "Erinnerung durch den Code") }}</p>{% endif %}
   </li>
+  {% endif %}
 </ol>
 {% if empfehlungen or ergebnis.uebergaben or ergebnis.kuendigungen %}
 <div class="ergebnis-liste">

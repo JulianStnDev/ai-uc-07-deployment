@@ -85,10 +85,18 @@ def warte_bis_fertig(client, run_id, timeout=5):
     raise AssertionError("Lauf wurde nicht fertig")
 
 
-def starte(client, kunden_id="K001", text="Mir wurde doppelt abgebucht.", **extra):
+def lege_an(client, kunden_id="K001", text="Mir wurde doppelt abgebucht.", **extra):
+    """Nur POST: Der Lauf ist danach angelegt, aber noch nicht gestartet."""
     r = client.post("/lauf", data={"kunden_id": kunden_id, "text": text, **extra}, follow_redirects=False)
     assert r.status_code == 303, r.text
     return r.headers["location"].rsplit("/", 1)[1]
+
+
+def starte(client, kunden_id="K001", text="Mir wurde doppelt abgebucht.", **extra):
+    """Wie im Browser: POST, dann öffnet die Laufseite den Stream, und der startet den Lauf."""
+    run_id = lege_an(client, kunden_id, text, **extra)
+    sse_ereignisse(client, run_id)
+    return run_id
 
 
 def sse_ereignisse(client, run_id, headers=None):
@@ -260,16 +268,25 @@ def test_ohne_api_key_wird_lauf_zum_fehler(tmp_path, monkeypatch):
 
 
 def test_nur_ein_lauf_gleichzeitig(client):
-    client.app.state.speicher.lauf_anlegen("20260928-000000-aaaaaa", "K001", "a@example.com", "läuft noch")
+    client.app.state.speicher.lauf_anlegen("20260928-000000-aaaaaa", "K001", "a@example.com", "läuft noch", status="laeuft")
     r = client.post("/lauf", data={"kunden_id": "K002", "text": "Hallo"})
     assert r.status_code == 429 and "anderes Anliegen" in r.text
 
 
 def test_verwaiste_laeufe_beim_start_pauschal_verbucht(tmp_path):
-    Speicher(tmp_path / "uc7.sqlite").lauf_anlegen("20260928-000000-bbbbbb", "K001", "a@example.com", "x")
+    from datetime import timedelta
+    s = Speicher(tmp_path / "uc7.sqlite")
+    alt = datetime.now(timezone.utc) - timedelta(minutes=20)
+    s.lauf_anlegen("20260928-000000-bbbbbb", "K001", "a@example.com", "alt", jetzt=alt, status="laeuft")
+    s.lauf_anlegen("20260928-000000-dddddd", "K001", "a@example.com", "nie gestartet", jetzt=alt)
+    s.lauf_anlegen("20260928-000000-cccccc", "K001", "a@example.com", "läuft gerade woanders", status="laeuft")
     with TestClient(create_app(cfg(tmp_path))) as c:
-        lauf = c.app.state.speicher.lauf("20260928-000000-bbbbbb")
+        sp = c.app.state.speicher
+        lauf = sp.lauf("20260928-000000-bbbbbb")
         assert lauf["status"] == "abgebrochen" and lauf["kosten_usd"] == 0.50
+        assert sp.lauf("20260928-000000-dddddd")["status"] == "verfallen" and sp.lauf("20260928-000000-dddddd")["kosten_usd"] == 0
+        # Jüngere Läufe können auf einer anderen Cloud-Run-Instanz laufen und bleiben unberührt
+        assert sp.lauf("20260928-000000-cccccc")["status"] == "laeuft"
 
 
 # ---------- Freigaben ----------
@@ -353,3 +370,100 @@ def test_sse_format_mehrzeilig():
 def test_usd_deutsch():
     assert darstellung.usd(1234.5) == "1.234,50 USD"
     assert darstellung.usd_genau(0.0312) == "0,0312 USD"
+
+
+def test_diagnose_startet_cli_ohne_api_und_nur_mit_zugang(client, tmp_path):
+    r = client.get("/diagnose")
+    assert r.status_code == 200 and r.json()["cli_ok"] and "Claude Code" in r.json()["cli_ausgabe"]
+    assert r.json()["speicher"] == "sqlite"
+    with TestClient(create_app(cfg(tmp_path / "x"))) as fremd:
+        assert fremd.get("/diagnose", follow_redirects=False).status_code == 303
+
+
+# ---------- Start in der SSE-Anfrage, ein Agent-Platz pro Instanz ----------
+
+def test_post_legt_nur_an_stream_startet(client, aufrufe):
+    run_id = lege_an(client)
+    sp = client.app.state.speicher
+    assert sp.lauf(run_id)["status"] == "angelegt" and aufrufe == []
+    assert budget.stand(sp, 4.50).reserviert_usd == 0.50            # angelegte Läufe sind schon reserviert
+    assert "sse-connect" in client.get(f"/lauf/{run_id}").text      # Seite hört zu und startet damit den Lauf
+    ev = sse_ereignisse(client, run_id)
+    assert ev[-1]["event"] == "ende" and len(aufrufe) == 1
+    assert sp.lauf(run_id)["status"] == "fertig"
+    # Zweite Verbindung (Reload, anderer Tab) startet nicht noch einmal
+    sse_ereignisse(client, run_id)
+    assert len(aufrufe) == 1
+
+
+def test_belegter_platz_wartet_und_verfaellt_ohne_kosten(tmp_path, aufrufe):
+    app = create_app(cfg(tmp_path, agent_wartezeit_s=0.3), query_fn=fake_doppelabbuchung(aufrufe))
+    with TestClient(app) as c:
+        c.post("/login", data={"code": CODE})
+        run_id = lege_an(c)
+        c.portal.call(app.state.agent_platz.acquire)  # anderer Lauf belegt den Platz dieser Instanz
+        ev = sse_ereignisse(c, run_id)
+        assert "Wartet auf einen freien Platz" in ev[0]["data"]
+        assert "Gerade ist viel los" in "".join(e.get("data", "") for e in ev) and "nicht gestartet" in "".join(e.get("data", "") for e in ev)
+        lauf = c.app.state.speicher.lauf(run_id)
+        assert lauf["status"] == "verfallen" and lauf["kosten_usd"] == 0 and aufrufe == []
+
+
+def test_wartet_bis_platz_frei_und_startet_dann(tmp_path, aufrufe):
+    import threading
+    app = create_app(cfg(tmp_path, agent_wartezeit_s=5), query_fn=fake_doppelabbuchung(aufrufe))
+    with TestClient(app) as c:
+        c.post("/login", data={"code": CODE})
+        run_id = lege_an(c)
+        c.portal.call(app.state.agent_platz.acquire)
+        threading.Timer(0.3, lambda: c.portal.call(app.state.agent_platz.release)).start()
+        ev = sse_ereignisse(c, run_id)
+        assert "Wartet auf einen freien Platz" in ev[0]["data"] and ev[-1]["event"] == "ende"
+        assert c.app.state.speicher.lauf(run_id)["status"] == "fertig" and len(aufrufe) == 1
+        assert not app.state.agent_platz.locked()  # nach dem Lauf wieder frei
+
+
+def test_lauf_auf_anderer_instanz_wird_aus_dem_speicher_nachgereicht(client, monkeypatch):
+    import threading
+    monkeypatch.setattr("app.main.POLL_S", 0.05)
+    sp = client.app.state.speicher
+    sp.lauf_anlegen("20260928-000000-eeeeee", "K001", "anna.berger@example.com", "x", status="laeuft")
+    def andere_instanz_fertig():
+        sp.lauf_abschliessen("20260928-000000-eeeeee", status="fertig", kosten_usd=0.03, kosten_pauschal=False, dauer_s=30,
+                             ergebnis={"status": "fertig", "entwurf": "Hallo von Instanz B", "empfehlungen": [], "uebergaben": [],
+                                       "kuendigungen": [], "eingriffe": 0, "pflichten_offen": [], "kosten_usd": 0.03,
+                                       "kosten_pauschal": False, "dauer_s": 30, "num_turns": 4, "fehlertext": None},
+                             ereignisse=[{"art": "text", "text": "Notiz von B"}], empfehlungen=[])
+    threading.Timer(0.3, andere_instanz_fertig).start()
+    ev = sse_ereignisse(client, "20260928-000000-eeeeee")
+    daten = "".join(e.get("data", "") for e in ev)
+    assert "Notiz von B" in daten and "Hallo von Instanz B" in daten and ev[-1]["event"] == "ende"
+
+
+def test_lauf_laeuft_weiter_wenn_stream_abbricht(tmp_path, aufrufe):
+    """Tab zu: Der Lauf ist ein eigener Task und wird trotzdem fertig und verbucht."""
+    import asyncio as aio
+    langsam_aufrufe = []
+    async def langsam(prompt, options, kasten):
+        await aio.sleep(0.3)
+        async for m in fake_doppelabbuchung(langsam_aufrufe)(prompt, options, kasten):
+            yield m
+    with TestClient(create_app(cfg(tmp_path), query_fn=langsam)) as c:
+        c.post("/login", data={"code": CODE})
+        run_id = lege_an(c)
+        with c.stream("GET", f"/lauf/{run_id}/stream") as r:
+            next(r.iter_lines())  # erste Zeile gelesen, dann Verbindung zu
+        lauf = warte_bis_fertig(c, run_id)
+        assert lauf["status"] == "fertig" and lauf["kosten_usd"] == pytest.approx(0.031)
+
+
+def test_beobachter_verliert_keine_meldung_zwischen_pruefen_und_warten():
+    import asyncio as aio
+    from app.lauf import Beobachter
+    async def ablauf():
+        b = Beobachter()
+        signal = b.signal()          # Stream holt das Signal ...
+        b.melden({"art": "text"})    # ... dann meldet der Lauf, bevor der Stream wartet
+        return await b.warten(5, signal)
+    t0 = __import__("time").perf_counter()
+    assert aio.run(ablauf()) is True and __import__("time").perf_counter() - t0 < 1

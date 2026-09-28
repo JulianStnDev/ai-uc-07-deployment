@@ -1,6 +1,6 @@
 # UC7 — Deployment: Der Support-Agent als Web-Demo
 
-> Stand: Branch (a) lokal lauffähig mit Dockerfile, Oberfläche als Kundenportal überarbeitet. Deployment (Cloud Run + Neon) folgt in Branch (b), Monitoring in (c).
+> Stand: online auf Cloud Run in Frankfurt (https://uc7-807149335205.europe-west3.run.app, Zugang nur mit Zugangscode), Protokoll in Neon Postgres (Frankfurt). Monitoring folgt in Branch (c). Deploy-Anleitung: [docs/deploy.md](docs/deploy.md).
 
 | Anliegen mit Ergebnis | Support-Konsole |
 |---|---|
@@ -18,7 +18,7 @@ Browser ──POST /lauf──▶ FastAPI ──asyncio-Task──▶ uc4_agent 
    ▲                       │                              │ Werkzeugaufrufe (MCP in-process)
    └──── SSE /lauf/{id}/stream ◀── Beobachter ◀───────────┘
                            │
-                           └──▶ SQLite (Branch a) / Neon (Branch b): Läufe, Kosten, Empfehlungen, Freigaben
+                           └──▶ Neon Postgres (lokal ohne DATABASE_URL: SQLite): Läufe, Kosten, Empfehlungen, Freigaben
 ```
 - `uc4_agent/`: Kopie des UC4-Agents (Prompt v3, Stop-Hook, Autonomie-Matrix unverändert), Herkunft in `uc4_agent/HERKUNFT.md`.
 - `app/`: Web-App. `lauf.py` führt ein Anliegen aus, `budget.py` rechnet den Monatsdeckel, `speicher.py` ist das Protokoll, `main.py` die Routen, `darstellung.py` die Texte der Zeitleiste, `hinweise.py` die Info-Hinweise und die Titelregel.

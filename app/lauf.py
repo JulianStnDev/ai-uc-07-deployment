@@ -52,9 +52,13 @@ class Beobachter:
         self._signal.set()
         self._signal = asyncio.Event()
 
-    async def warten(self, timeout: float) -> bool:
+    def signal(self) -> asyncio.Event:
+        """Das Signal VOR dem Prüfen auf neue Ereignisse holen, sonst kann eine Meldung dazwischen verloren gehen."""
+        return self._signal
+
+    async def warten(self, timeout: float, signal: asyncio.Event | None = None) -> bool:
         """Wartet auf ein neues Ereignis. False bei Zeitablauf (dann schickt SSE einen Ping)."""
-        signal = self._signal
+        signal = signal or self._signal
         try:
             await asyncio.wait_for(signal.wait(), timeout)
             return True

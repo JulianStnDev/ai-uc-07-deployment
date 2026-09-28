@@ -67,3 +67,27 @@ Entscheidung: Startseite mit „So funktioniert diese Demo“ (drei Schritte) un
 **Die Zeitleiste zeigt nur, was der Agent gesehen und geschlossen hat, keine Deutungen der Oberfläche.** Beispiel: Bei den Zahlungen steht „5 Zahlungen gefunden“ plus Liste, nicht „darunter zweimal 54,34 USD“. Begründung: Hebt die Oberfläche etwas hervor, sieht es so aus, als hätte der Agent es erkannt. Das würde seine Leistung in der Demo besser aussehen lassen, als sie ist, und die Bewertung durch den Menschen in der Konsole beeinflussen. Schlüsse des Agents stehen in seinen eigenen Notizen und in seiner Empfehlung, die die Zeitleiste wörtlich wiedergibt.
 
 Titel eines Anliegens: das Label des Beispiel-Chips, wenn der Text unverändert ist, sonst die ersten Wörter. Kein LLM, damit ein Titel nichts kostet und nichts hinzudichtet.
+
+## 2026-09-28: Budgetalarm per gcloud, Projekt-ID, Dienstkonten
+
+Budgetalarm: In der Console ließ er sich nicht anlegen, per `gcloud billing budgets create` klappte es beim ersten Versuch, ohne Quota-Projekt und ohne zusätzliche Rechte. An Rechten lag es also nicht (Billing-Admin auf dem Konto, Owner im Projekt). Wahrscheinlichste Ursache, nicht verifiziert: Es gibt zwei Billing-Konten mit demselben Namen „Mein Rechnungskonto“. Nur eines davon (`010944-…`) ist mit dem Projekt verbunden. Wählt die Console das andere, taucht das Projekt im Budget-Filter nicht auf. Das Budget lautet auf 5 EUR, weil das Konto in EUR abrechnet.
+
+Projekt-ID: „focusflow-demo“ ist der Anzeigename, die ID lautet `focusflow-demo-510014`. gcloud braucht die ID.
+
+Dienstkonten: Cloud Run läuft unter einem eigenen Konto `uc7-run`, das nur die vier Secrets lesen darf. Das Standardkonto hätte Editor-Rechte auf das ganze Projekt. Die Secrets sind auf feste Versionen gepinnt.
+
+## 2026-09-28: Option B, Lauf in der SSE-Anfrage, Concurrency 4 mit einem Agent-Platz je Instanz
+
+Kontext: Cloud Run teilt CPU standardmäßig nur während einer Anfrage zu. Schließt ein Besucher den Tab, würde ein Lauf im Hintergrund eingefroren. Außerdem kann bei zwei Instanzen die Live-Verbindung auf einer anderen Instanz landen als der Lauf (Session-Affinität ist laut Doku nur „best effort“).
+
+Optionen (Frankfurt, Tier 2, 50 Läufe à 45 s im Monat): (A) Abrechnung pro Anfrage, Lauf bricht beim Schließen ab, ca. 0 USD, aber abgebrochene Läufe kosten pauschal 0,50 USD Budget. (B) Abrechnung pro Instanz (`--no-cpu-throttling`), Lauf läuft zu Ende, bis ca. 0,03 USD je Besuch, weil die Instanz bis 15 min nachläuft, laut Pricing-Seite im eigenen Free Tier. (C) wie B plus `min-instances 1`, ca. 62 USD/Monat. (D) Cloud Tasks/Jobs, mehr Infrastruktur.
+
+Entscheidung: B. Dazu startet der Lauf erst in der SSE-Anfrage der Laufseite (der POST legt ihn nur an, die SSE-Anfrage übernimmt ihn atomar per `UPDATE … WHERE status='angelegt'`). Dadurch läuft der Agent immer auf der Instanz, mit der der Browser verbunden ist. Der Lauf ist ein eigener Task und endet nicht mit der Verbindung.
+
+Concurrency: Mit `--concurrency 1` hätte eine offene Live-Verbindung die ganze Instanz blockiert. Jeder weitere Seitenaufruf desselben Besuchers (Konsole, Start) hätte eine zweite Instanz gebraucht, ein dritter Besucher hätte gewartet. Deshalb `--concurrency 4` und in der App höchstens ein Agent-Lauf je Instanz (Semaphore). Ist der Platz belegt, zeigt die Seite „Wartet auf einen freien Platz“ und startet, sobald er frei ist (höchstens 90 s, sonst verfällt das Anliegen ohne Kosten).
+
+Speicher (1 GiB), gemessen in Cloud Monitoring am 2026-09-28 (p99 je Minute, grob): Leerlauf 7 % (ca. 72 MiB), Minute mit Agent-Lauf 18 % (ca. 185 MiB). Ein Lauf braucht also rund 110 MiB zusätzlich, Seitenanfragen wenige MiB. Vier gleichzeitige Anfragen mit einem Agent passen mit großem Abstand. Anthropic empfiehlt 1 GiB je Agent als Untergrenze, deshalb trotzdem nur ein Agent je Instanz. Die Minutenwerte können kurze Spitzen verpassen.
+
+Geprüft: Ein Lauf mit nach 5 s geschlossenem Tab (T08, Kündigung) lief in Cloud Run zu Ende und wurde mit den echten Kosten (0,024 USD) statt der Pauschale verbucht.
+
+Bekannte Grenze: Cloud Run leitet Anfragen nach Auslastung, nicht nach unserem Agent-Platz. Bei wenig Verkehr landet ein zweiter gleichzeitiger Besucher eher auf der schon laufenden Instanz und wartet, statt eine zweite zu starten.
