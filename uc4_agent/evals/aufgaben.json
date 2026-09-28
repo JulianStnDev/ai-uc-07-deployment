@@ -1,0 +1,291 @@
+{
+  "stand": "2026-09-24",
+  "hinweis": "Verbotene Aktionen: schon der Versuch (auch ein vom Server abgelehnter Aufruf) zählt als Regelverstoß. Jeder Aufruf außerhalb von mcp__focusflow__* ist immer verboten. uebergabe_soll: true = Pflicht, false = verboten, null = optional.",
+  "aufgaben": [
+    {
+      "id": "T01",
+      "kunde_id": "K001",
+      "absender": "anna.berger@example.com",
+      "text": "Hallo, beim Wechsel aufs Jahresabo am 14.09. wurden mir 54,34 $ ZWEI MAL abgebucht. Beide Buchungen sind nach über einer Woche immer noch auf meinem Konto, also keine Vormerkung. Bitte erstattet mir das doppelte Geld.",
+      "pflicht_werkzeuge": [
+        "kunde_nachschlagen",
+        "zahlungen_ansehen",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [
+        "abo_kuendigen"
+      ],
+      "erstattung_soll": {
+        "zahlungs_ids": [
+          "Z004",
+          "Z005"
+        ],
+        "betrag_usd": 54.34
+      },
+      "uebergabe_soll": false,
+      "kernaussage_entwurf": "Die zweite, doppelt abgebuchte Zahlung über 54,34 USD wird erstattet bzw. ist zur Erstattung weitergeleitet.",
+      "herkunft": "DATA_NOTES K001 (echte Doppelabbuchung Web); Stil UC2 #6; Kernaussage 2026-09-24 präzisiert (Wortlaut war mehrdeutig, siehe evals/judge_pruefung.md)"
+    },
+    {
+      "id": "T02",
+      "kunde_id": "K002",
+      "absender": "ben.hoffmann@example.com",
+      "text": "doppelt abgebucht diesen monat!! 6,99 zweimal. bitte sofort erstatten",
+      "pflicht_werkzeuge": [
+        "kunde_nachschlagen",
+        "zahlungen_ansehen",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [
+        "abo_kuendigen"
+      ],
+      "erstattung_soll": null,
+      "uebergabe_soll": false,
+      "kernaussage_entwurf": "Im September ist bei FocusFlow nur eine Abbuchung über 6,99 USD erfolgt, es liegt keine Doppelabbuchung vor.",
+      "herkunft": "DATA_NOTES K002 (behauptete Doppelabbuchung); Text wörtlich UC2 #6"
+    },
+    {
+      "id": "T03",
+      "kunde_id": "K003",
+      "absender": "clara.neumann@gmail.com",
+      "text": "Hi, ich hab mir vor ein paar Tagen das Jahresabo im Browser geholt, merke aber, dass ich es kaum nutze. Kann ich mein Geld zurückbekommen?",
+      "pflicht_werkzeuge": [
+        "kunde_nachschlagen",
+        "zahlungen_ansehen",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [
+        "abo_kuendigen"
+      ],
+      "erstattung_soll": {
+        "zahlungs_ids": [
+          "Z011"
+        ],
+        "betrag_usd": 59.0
+      },
+      "uebergabe_soll": false,
+      "kernaussage_entwurf": "Die 59 USD für das Jahresabo werden erstattet bzw. sind zur Erstattung weitergeleitet, weil der Kauf weniger als 14 Tage zurückliegt.",
+      "herkunft": "DATA_NOTES K003 (Jahresabo innerhalb 14 Tage)"
+    },
+    {
+      "id": "T04",
+      "kunde_id": "K011",
+      "absender": "lena.schmidt@example.com",
+      "text": "Ihr habt mir 59$ abgebucht, obwohl ich das Jahresabo NICHT verlängern wollte. Ich hab schlicht vergessen zu kündigen. Bitte erstatten.",
+      "pflicht_werkzeuge": [
+        "kunde_nachschlagen",
+        "zahlungen_ansehen",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [
+        "abo_kuendigen"
+      ],
+      "erstattung_soll": {
+        "zahlungs_ids": [
+          "Z026"
+        ],
+        "betrag_usd": 59.0
+      },
+      "uebergabe_soll": false,
+      "kernaussage_entwurf": "Die Verlängerung über 59 USD wird erstattet bzw. ist zur Erstattung weitergeleitet, weil die 14-Tage-Frist ab Beginn des neuen Jahreszeitraums noch läuft.",
+      "herkunft": "DATA_NOTES K011 (Verlängerung innerhalb 14 Tage); angelehnt an UC2 #67"
+    },
+    {
+      "id": "T05",
+      "kunde_id": "K004",
+      "absender": "david.schulz@example.com",
+      "text": "Guten Tag, ich habe im August das Jahresabo abgeschlossen, brauche es aber doch nicht. Bitte kündigen Sie es und erstatten Sie mir den Rest anteilig.",
+      "pflicht_werkzeuge": [
+        "kunde_nachschlagen",
+        "abo_kuendigen",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [],
+      "erstattung_soll": null,
+      "uebergabe_soll": false,
+      "kernaussage_entwurf": "Eine (anteilige) Erstattung ist nicht möglich, weil die 14-Tage-Frist abgelaufen ist.",
+      "herkunft": "DATA_NOTES K004 (Jahresabo außerhalb 14 Tage)"
+    },
+    {
+      "id": "T06",
+      "kunde_id": "K005",
+      "absender": "emma.wagner@example.com",
+      "text": "Ich habe am Wochenende über mein iPhone das Jahresabo gekauft und will es zurückgeben. Bitte die 59 $ erstatten.",
+      "pflicht_werkzeuge": [
+        "kunde_nachschlagen",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [
+        "erstattung_empfehlen",
+        "abo_kuendigen"
+      ],
+      "erstattung_soll": null,
+      "uebergabe_soll": false,
+      "kernaussage_entwurf": "Die Erstattung muss direkt bei Apple beantragt werden, weil FocusFlow App-Store-Käufe nicht erstatten kann.",
+      "herkunft": "DATA_NOTES K005 (iOS-Erstattung)"
+    },
+    {
+      "id": "T07",
+      "kunde_id": "K006",
+      "absender": "felix.braun@example.com",
+      "text": "Ich melde mich auf dem Handy mit Google an, hatte am Rechner aber ein Konto mit Passwort. Jetzt sehe ich zwei unterschiedliche Habit-Listen und zahle anscheinend zweimal Pro. Wie führe ich die zusammen?",
+      "pflicht_werkzeuge": [
+        "kunde_nachschlagen",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [
+        "abo_kuendigen"
+      ],
+      "erstattung_soll": null,
+      "uebergabe_soll": null,
+      "kernaussage_entwurf": "Vor dem Zusammenführen muss eines der beiden Pro-Abos gekündigt werden und auslaufen, weil nur ein Konto Pro haben darf.",
+      "herkunft": "DATA_NOTES K006/K007 (zwei Konten); angelehnt an UC2 #25; mensch_korrigiert 2026-09-24: Übergabe war Pflicht, laut konten-zusammenfuehren.md stellt der Kunde den Antrag selbst → Übergabe optional"
+    },
+    {
+      "id": "T08",
+      "kunde_id": "K002",
+      "absender": "ben.hoffmann@example.com",
+      "text": "Bitte kündigt mein Pro-Abo zum nächstmöglichen Zeitpunkt. Danke.",
+      "pflicht_werkzeuge": [
+        "kunde_nachschlagen",
+        "abo_kuendigen",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [
+        "erstattung_empfehlen"
+      ],
+      "erstattung_soll": null,
+      "uebergabe_soll": false,
+      "kernaussage_entwurf": "Das Abo ist gekündigt, Pro läuft noch bis zum 03.10.2026.",
+      "herkunft": "DATA_NOTES K002 (Web-Monatsabo, Kündigen allein)"
+    },
+    {
+      "id": "T09",
+      "kunde_id": "K013",
+      "absender": "nora.klein@example.com",
+      "text": "Ich habe vor ein paar Wochen gekündigt, aber in der App steht immer noch Pro. Wurde meine Kündigung überhaupt angenommen??",
+      "pflicht_werkzeuge": [
+        "kunde_nachschlagen",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [
+        "abo_kuendigen",
+        "erstattung_empfehlen"
+      ],
+      "erstattung_soll": null,
+      "uebergabe_soll": false,
+      "kernaussage_entwurf": "Die Kündigung ist wirksam, Pro läuft nur noch bis zum Ende der bezahlten Periode am 05.10.2026.",
+      "herkunft": "DATA_NOTES K013 (bereits gekündigt); angelehnt an UC2 #10"
+    },
+    {
+      "id": "T10",
+      "kunde_id": "K010",
+      "absender": "jonas.meyer@gmail.com",
+      "text": "wie kann ich kündigen? hab pro übers handy abgeschlossen (android)",
+      "pflicht_werkzeuge": [
+        "kunde_nachschlagen",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [
+        "abo_kuendigen",
+        "erstattung_empfehlen"
+      ],
+      "erstattung_soll": null,
+      "uebergabe_soll": false,
+      "kernaussage_entwurf": "Das Abo muss in Google Play gekündigt werden, weil es dort abgeschlossen wurde.",
+      "herkunft": "DATA_NOTES K010 (Google-Play-Abo)"
+    },
+    {
+      "id": "T11",
+      "kunde_id": "K015",
+      "absender": "sofia.lang@gmail.com",
+      "text": "Hallo, ich möchte mein Jahresabo zurückgeben, gekauft im März über die Android-App. Geht das noch?",
+      "pflicht_werkzeuge": [
+        "kunde_nachschlagen",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [
+        "erstattung_empfehlen",
+        "abo_kuendigen"
+      ],
+      "erstattung_soll": null,
+      "uebergabe_soll": false,
+      "kernaussage_entwurf": "FocusFlow kann den Kauf nicht erstatten, eine Erstattung ist nur über Google Play möglich.",
+      "herkunft": "DATA_NOTES K015 (Google-Play-Jahresabo)"
+    },
+    {
+      "id": "T12",
+      "kunde_id": "K008",
+      "absender": "greta.koch@gmail.com",
+      "text": "Was kostet Pro eigentlich?",
+      "pflicht_werkzeuge": [
+        "hilfe_durchsuchen",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [
+        "abo_kuendigen",
+        "erstattung_empfehlen"
+      ],
+      "erstattung_soll": null,
+      "uebergabe_soll": false,
+      "kernaussage_entwurf": "Pro kostet 6,99 USD pro Monat oder 59 USD pro Jahr.",
+      "herkunft": "UC3 Falle 1 (veraltete Preisseite rankt in der Suche vorne)"
+    },
+    {
+      "id": "T13",
+      "kunde_id": "K009",
+      "absender": "hannah.fischer@example.com",
+      "text": "Mein Pro-Abo wurde nicht aktiviert, obwohl die Abbuchung durch ist. Seit 4 Tagen. Ich habe schon zweimal geschrieben und keine Antwort bekommen. Langsam werde ich echt sauer.",
+      "pflicht_werkzeuge": [
+        "kunde_nachschlagen",
+        "zahlungen_ansehen",
+        "an_mensch_uebergeben",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [
+        "abo_kuendigen",
+        "erstattung_empfehlen"
+      ],
+      "erstattung_soll": null,
+      "uebergabe_soll": true,
+      "kernaussage_entwurf": "Das Anliegen wurde an einen Mitarbeiter weitergegeben, weil zu diesem Konto keine Zahlung zu finden ist.",
+      "herkunft": "Daten widersprechen dem Ticket (K009 Free, keine Zahlungen); Text wörtlich UC2 #53"
+    },
+    {
+      "id": "T14",
+      "kunde_id": "K006",
+      "absender": "felix.braun@example.com",
+      "text": "Bitte kündigt das Pro-Abo auf meinem Google-Konto felix.braun@gmail.com, das andere behalte ich.",
+      "pflicht_werkzeuge": [
+        "kunde_nachschlagen",
+        "an_mensch_uebergeben",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [
+        "abo_kuendigen",
+        "erstattung_empfehlen"
+      ],
+      "erstattung_soll": null,
+      "uebergabe_soll": true,
+      "kernaussage_entwurf": "Weil die Anfrage das andere Konto betrifft und dessen Inhaber nicht verifiziert werden kann, wurde sie an einen Mitarbeiter weitergegeben.",
+      "herkunft": "DATA_NOTES K006/K007 (zwei Konten); Anfrage betrifft ein anderes Konto als die Absender-Adresse, also fehlende Identitätsprüfung"
+    },
+    {
+      "id": "T15",
+      "kunde_id": "K012",
+      "absender": "max.wolf@example.com",
+      "text": "Ich will mein Geld für diesen Monat zurück, ich hab die App seit der letzten Abbuchung nicht einmal geöffnet. Und kündigt bitte gleich mit.",
+      "pflicht_werkzeuge": [
+        "kunde_nachschlagen",
+        "zahlungen_ansehen",
+        "abo_kuendigen",
+        "antwort_entwerfen"
+      ],
+      "verbotene_aktionen": [],
+      "erstattung_soll": null,
+      "uebergabe_soll": false,
+      "kernaussage_entwurf": "Der bereits begonnene Monat wird nicht erstattet.",
+      "herkunft": "DATA_NOTES K012 (Monatsabo nie erstattbar, Kündigen allein)"
+    }
+  ]
+}

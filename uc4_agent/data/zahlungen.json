@@ -1,0 +1,348 @@
+{
+  "zahlungen": [
+    {
+      "zahlungs_id": "Z001",
+      "kunden_id": "K001",
+      "datum": "2026-07-04",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z002",
+      "kunden_id": "K001",
+      "datum": "2026-08-04",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z003",
+      "kunden_id": "K001",
+      "datum": "2026-09-04",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z004",
+      "kunden_id": "K001",
+      "datum": "2026-09-14",
+      "betrag_usd": 54.34,
+      "anbieter": "stripe",
+      "beschreibung": "Wechsel auf FocusFlow Pro jährlich (59,00 USD abzgl. 4,66 USD Guthaben)"
+    },
+    {
+      "zahlungs_id": "Z005",
+      "kunden_id": "K001",
+      "datum": "2026-09-14",
+      "betrag_usd": 54.34,
+      "anbieter": "stripe",
+      "beschreibung": "Wechsel auf FocusFlow Pro jährlich (59,00 USD abzgl. 4,66 USD Guthaben)"
+    },
+    {
+      "zahlungs_id": "Z006",
+      "kunden_id": "K002",
+      "datum": "2026-05-03",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z007",
+      "kunden_id": "K002",
+      "datum": "2026-06-03",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z008",
+      "kunden_id": "K002",
+      "datum": "2026-07-03",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z009",
+      "kunden_id": "K002",
+      "datum": "2026-08-03",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z010",
+      "kunden_id": "K002",
+      "datum": "2026-09-03",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z011",
+      "kunden_id": "K003",
+      "datum": "2026-09-18",
+      "betrag_usd": 59.0,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro jährlich"
+    },
+    {
+      "zahlungs_id": "Z012",
+      "kunden_id": "K004",
+      "datum": "2026-08-15",
+      "betrag_usd": 59.0,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro jährlich"
+    },
+    {
+      "zahlungs_id": "Z013",
+      "kunden_id": "K005",
+      "datum": "2026-09-20",
+      "betrag_usd": 59.0,
+      "anbieter": "apple",
+      "beschreibung": "FocusFlow Pro jährlich (App Store)"
+    },
+    {
+      "zahlungs_id": "Z014",
+      "kunden_id": "K006",
+      "datum": "2026-04-12",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z015",
+      "kunden_id": "K006",
+      "datum": "2026-05-12",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z016",
+      "kunden_id": "K006",
+      "datum": "2026-06-12",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z017",
+      "kunden_id": "K006",
+      "datum": "2026-07-12",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z018",
+      "kunden_id": "K006",
+      "datum": "2026-08-12",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z019",
+      "kunden_id": "K006",
+      "datum": "2026-09-12",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z020",
+      "kunden_id": "K007",
+      "datum": "2026-08-01",
+      "betrag_usd": 6.99,
+      "anbieter": "google",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z021",
+      "kunden_id": "K007",
+      "datum": "2026-09-01",
+      "betrag_usd": 6.99,
+      "anbieter": "google",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z022",
+      "kunden_id": "K010",
+      "datum": "2026-07-21",
+      "betrag_usd": 6.99,
+      "anbieter": "google",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z023",
+      "kunden_id": "K010",
+      "datum": "2026-08-21",
+      "betrag_usd": 6.99,
+      "anbieter": "google",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z024",
+      "kunden_id": "K010",
+      "datum": "2026-09-21",
+      "betrag_usd": 6.99,
+      "anbieter": "google",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z025",
+      "kunden_id": "K011",
+      "datum": "2025-09-15",
+      "betrag_usd": 59.0,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro jährlich"
+    },
+    {
+      "zahlungs_id": "Z026",
+      "kunden_id": "K011",
+      "datum": "2026-09-15",
+      "betrag_usd": 59.0,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro jährlich (Verlängerung)"
+    },
+    {
+      "zahlungs_id": "Z027",
+      "kunden_id": "K012",
+      "datum": "2026-01-08",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z028",
+      "kunden_id": "K012",
+      "datum": "2026-02-08",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z029",
+      "kunden_id": "K012",
+      "datum": "2026-03-08",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z030",
+      "kunden_id": "K012",
+      "datum": "2026-04-08",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z031",
+      "kunden_id": "K012",
+      "datum": "2026-05-08",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z032",
+      "kunden_id": "K012",
+      "datum": "2026-06-08",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z033",
+      "kunden_id": "K012",
+      "datum": "2026-07-08",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z034",
+      "kunden_id": "K012",
+      "datum": "2026-08-08",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z035",
+      "kunden_id": "K012",
+      "datum": "2026-09-08",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z036",
+      "kunden_id": "K013",
+      "datum": "2026-06-05",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z037",
+      "kunden_id": "K013",
+      "datum": "2026-07-05",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z038",
+      "kunden_id": "K013",
+      "datum": "2026-08-05",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z039",
+      "kunden_id": "K013",
+      "datum": "2026-09-05",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z040",
+      "kunden_id": "K014",
+      "datum": "2025-03-01",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z041",
+      "kunden_id": "K014",
+      "datum": "2025-04-01",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z042",
+      "kunden_id": "K014",
+      "datum": "2025-05-01",
+      "betrag_usd": 6.99,
+      "anbieter": "stripe",
+      "beschreibung": "FocusFlow Pro monatlich"
+    },
+    {
+      "zahlungs_id": "Z043",
+      "kunden_id": "K015",
+      "datum": "2026-03-02",
+      "betrag_usd": 59.0,
+      "anbieter": "google",
+      "beschreibung": "FocusFlow Pro jährlich (Google Play)"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titel %}Support-Agent{% endblock %} · FocusFlow-Demo</title>
+  <link rel="stylesheet" href="/static/stil.css">
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/htmx-sse.js"></script>
+</head>
+<body>
+  <header>
+    <div class="marke">FocusFlow · Support-Agent <span class="dezent">Demo</span></div>
+    {% block navigation %}
+    <nav>
+      <a href="/">Neues Ticket</a>
+      <a href="/freigaben">Freigaben{% if offene_freigaben %} <span class="zahl">{{ offene_freigaben }}</span>{% endif %}</a>
+      <span class="budget {% if budget.gesperrt %}voll{% endif %}" title="API-Kosten in diesem Monat inkl. Reserve für laufende Tickets">
+        Budget {{ budget.belegt_usd | usd }} / {{ budget.deckel_usd | usd }}
+      </span>
+      <form method="post" action="/abmelden"><button class="link">Abmelden</button></form>
+    </nav>
+    {% endblock %}
+  </header>
+  <main>
+    {% block inhalt %}{% endblock %}
+  </main>
+  <footer>
+    Demo mit erfundenen Kundendaten. Der Agent versendet nichts und bucht nichts:
+    Antworten sind Entwürfe, Erstattungen nur Empfehlungen, über die ein Mensch entscheidet.
+  </footer>
+</body>
+</html>

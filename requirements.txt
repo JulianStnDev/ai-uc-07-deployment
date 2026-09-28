@@ -1,0 +1,6 @@
+claude-agent-sdk>=0.2.160
+python-dotenv>=1.0
+fastapi>=0.135
+uvicorn[standard]>=0.37
+jinja2>=3.1
+python-multipart>=0.0.20
