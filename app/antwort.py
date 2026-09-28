@@ -18,7 +18,7 @@ ANTWORT_SYSTEM = """Du schreibst die endgültige Antwort des Supports der Habit-
 
 Regeln:
 - Teile die Entscheidung klar mit: bestätigt heißt, die Erstattung über den genannten Betrag ist freigegeben. Abgelehnt heißt, es gibt keine Erstattung.
-- Bei einer Ablehnung nenne den Grund aus dem Kommentar des Mitarbeiters. Gibt es keinen Kommentar, schreib neutral, dass die Prüfung keine Erstattung ergeben hat, ohne einen Grund zu erfinden.
+- Steht bei einer Entscheidung eine Begründung für den Kunden, gib sie in der Antwort sinngemäß wieder. Das gilt vor allem bei einer Ablehnung. Fehlt sie bei einer Ablehnung, schreib neutral, dass die Prüfung keine Erstattung ergeben hat, ohne einen Grund zu erfinden.
 - Übernimm aus dem Entwurf des Agents nur, was durch die Werkzeugaufrufe gedeckt ist (z. B. eine erfolgte Kündigung). Streiche Vermutungen über Ursachen.
 - Nenne keine Fristen, Zeitpunkte oder Abläufe, die nicht wörtlich in den Werkzeugaufrufen stehen (z. B. Hilfeartikel). Keine Zusagen, die niemand gegeben hat.
 - Deutsch, per Du, freundlich, knapp. Anrede mit Vornamen, Gruß „FocusFlow Support“. Kein Markdown.
@@ -42,7 +42,8 @@ def entscheidungen_als_text(empfehlungen: list[dict]) -> str:
     zeilen = []
     for e in empfehlungen:
         wort = {"bestaetigt": "bestätigt", "abgelehnt": "abgelehnt"}.get(e.get("entscheidung"), "offen")
-        k = f" Kommentar des Mitarbeiters: {e['kommentar']}" if e.get("kommentar") else " Kein Kommentar."
+        # Nur die Begründung für den Kunden. Die interne Notiz (freigaben.notiz) kommt hier nie an.
+        k = f" Begründung für den Kunden: {e['kommentar']}" if e.get("kommentar") else " Keine Begründung angegeben."
         zeilen.append(f"Erstattung über {usd(e['betrag_usd'])} für Zahlung {e['zahlungs_id']}: {wort}.{k}")
     return "\n".join(zeilen)
 

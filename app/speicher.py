@@ -60,8 +60,9 @@ SCHEMA = [
     """CREATE TABLE IF NOT EXISTS freigaben (
         empfehlungs_id  TEXT PRIMARY KEY REFERENCES empfehlungen(empfehlungs_id),
         entscheidung    TEXT NOT NULL CHECK (entscheidung IN ('bestaetigt', 'abgelehnt')),
-        kommentar       TEXT NOT NULL DEFAULT '',
-        entschieden     TEXT NOT NULL
+        kommentar       TEXT NOT NULL DEFAULT '',   -- Begründung für den Kunden: geht in die endgültige Antwort
+        entschieden     TEXT NOT NULL,
+        notiz           TEXT NOT NULL DEFAULT ''    -- interne Notiz: nur Protokoll und Konsole, nie an ein Modell
     )""",
 ]
 
@@ -96,6 +97,8 @@ class _Sqlite:
             spalten = {r["name"] for r in x("PRAGMA table_info(laeufe)")}
             if "titel" not in spalten:  # Datenbank aus Branch (a)
                 x("ALTER TABLE laeufe ADD COLUMN titel TEXT")
+            if "notiz" not in {r["name"] for r in x("PRAGMA table_info(freigaben)")}:  # Datenbank vor der Notiz
+                x("ALTER TABLE freigaben ADD COLUMN notiz TEXT NOT NULL DEFAULT ''")
 
 
 class _Postgres:
@@ -120,6 +123,7 @@ class _Postgres:
         with self.verbindung() as x:
             for s in SCHEMA:
                 x(s)
+            x("ALTER TABLE freigaben ADD COLUMN IF NOT EXISTS notiz TEXT NOT NULL DEFAULT ''")  # Datenbank vor der Notiz
 
     def schliessen(self):
         self.pool.close()
@@ -224,22 +228,23 @@ class Speicher:
 
     def entschiedene_empfehlungen(self, limit: int = 20) -> list[dict]:
         return self._alle(
-            "SELECT e.*, f.entscheidung, f.kommentar, f.entschieden, l.titel FROM empfehlungen e JOIN laeufe l USING (run_id) "
+            "SELECT e.*, f.entscheidung, f.kommentar, f.notiz, f.entschieden, l.titel FROM empfehlungen e JOIN laeufe l USING (run_id) "
             "JOIN freigaben f USING (empfehlungs_id) ORDER BY f.entschieden DESC LIMIT ?", (limit,))
 
     def empfehlungen_zum_lauf(self, run_id: str) -> list[dict]:
+        """Grundlage der endgültigen Antwort. Die interne Notiz fehlt hier absichtlich."""
         return self._alle(
             "SELECT e.*, f.entscheidung, f.kommentar FROM empfehlungen e "
             "LEFT JOIN freigaben f USING (empfehlungs_id) WHERE e.run_id=? ORDER BY e.erstellt", (run_id,))
 
-    def entscheiden(self, empfehlungs_id: str, entscheidung: str, kommentar: str) -> bool:
+    def entscheiden(self, empfehlungs_id: str, entscheidung: str, kommentar: str, notiz: str = "") -> bool:
         """Speichert genau eine Entscheidung je Empfehlung. False, wenn unbekannt oder schon entschieden."""
         if entscheidung not in ("bestaetigt", "abgelehnt"):
             raise ValueError(f"Unbekannte Entscheidung: {entscheidung!r}")
         try:
             with self.backend.verbindung() as x:
-                x("INSERT INTO freigaben (empfehlungs_id, entscheidung, kommentar, entschieden) VALUES (?, ?, ?, ?)",
-                  (empfehlungs_id, entscheidung, kommentar.strip(), jetzt_iso()))
+                x("INSERT INTO freigaben (empfehlungs_id, entscheidung, kommentar, notiz, entschieden) VALUES (?, ?, ?, ?, ?)",
+                  (empfehlungs_id, entscheidung, kommentar.strip(), notiz.strip(), jetzt_iso()))
         except self.backend.fehler_integritaet:  # schon entschieden oder Empfehlung gibt es nicht
             return False
         return True

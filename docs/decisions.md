@@ -91,3 +91,33 @@ Speicher (1 GiB), gemessen in Cloud Monitoring am 2026-09-28 (p99 je Minute, gro
 Geprüft: Ein Lauf mit nach 5 s geschlossenem Tab (T08, Kündigung) lief in Cloud Run zu Ende und wurde mit den echten Kosten (0,024 USD) statt der Pauschale verbucht.
 
 Bekannte Grenze: Cloud Run leitet Anfragen nach Auslastung, nicht nach unserem Agent-Platz. Bei wenig Verkehr landet ein zweiter gleichzeitiger Besucher eher auf der schon laufenden Instanz und wartet, statt eine zweite zu starten.
+
+## 2026-09-28: Variante A, Antwort an den Kunden erst nach der Freigabe
+
+Kontext: Agent-Entwürfe sagen Erstattungen zu, die noch niemand freigegeben hat („wird vollständig erstattet“, „5–10 Werktage“). In der Kalibrierung verletzten 4 von 5 Entwürfen mit Erstattungsempfehlung `keine_zusage` (evals/kalibrierung.md). Prompt v3 verbietet das bereits. Das UC4-Learning gilt: Was immer gelten muss, gehört in den Code.
+
+Optionen: (A) fester Zwischenbescheid, endgültige Antwort erst nach der Entscheidung, (B) zwei Varianten vorab schreiben, (C) Code ersetzt die Erstattungszusage im Agent-Text durch Bausteine.
+
+Entscheidung: A. Gibt es im Lauf eine Erstattungsempfehlung, sieht der Kunde einen festen Zwischenbescheid ohne Zusage und ohne Frist. Nach der Entscheidung in der Support-Konsole schreibt Haiku 4.5 in einem Aufruf die endgültige Antwort. Grundlage sind Ablauf, Agent-Entwurf (als Vorlage) und Entscheidung samt Kommentar. Bei erschöpftem Budget oder API-Fehler greift eine feste Vorlage. Der Agent bleibt unverändert, sein Entwurf ist intern sichtbar (Kulisse, Konsole).
+
+Geprüft über die öffentliche URL: Bestätigung (T01) und Ablehnung (T03) ergaben je eine endgültige Antwort ohne Zusage über die Entscheidung hinaus. Der Judge wertete beide mit „keine Spekulation“ und „keine Zusage“ als ok. Die Werktage-Angabe aus dem Agent-Entwurf ist in der endgültigen Antwort nicht mehr enthalten.
+
+## 2026-09-28: Stichproben-Judge mit Sonnet 5
+
+Regeln ohne LLM für jeden Lauf: Kunde nachgeschlagen, Entwurf abgelegt, nur erlaubte Werkzeuge, nur für das eigene Konto gehandelt, Zahlungen vor einer Empfehlung angesehen. Judge (Fassung u1) für 20 % der Läufe, reproduzierbar per Hash der Lauf-ID. Er prüft den Text, den der Kunde bekommt: den Agent-Entwurf, wenn es keine Empfehlung gibt, sonst die endgültige Antwort. Kriterien: `keine_spekulation` (Wortlaut UC4-j3, mit Datum) und neu `keine_zusage`. Echte Anfragen haben keine Goldantwort, deshalb entfällt `entwurf_ok`.
+
+Modell: Sonnet 5. Kalibriert an 10 UC4-Läufen: Sonnet stimmt in 20 von 20 Einzelurteilen mit der Handprüfung überein, Haiku 4.5 in 15 von 20 (nachsichtiger bei Spekulation). Vorab festgelegte Regel war „Haiku nur, wenn alle 10 übereinstimmen“. Kosten je Urteil 0,022 USD (Sonnet) gegen 0,006 USD (Haiku).
+
+Deckel: höchstens 0,50 USD im Monat für Prüfungen, außerdem zählen sie in den Monatsdeckel von 4,50 USD. Auf der Betriebsseite lässt sich ein Lauf von Hand prüfen.
+
+## 2026-09-28: Least Privilege für das Build-Konto
+
+Dem Compute-Standardkonto (baut per Cloud Build) wurde `roles/editor` entzogen. Es hat nur noch `roles/run.builder`. Das Test-Deployment (Revision `uc7-00003`) lief ohne weitere Rolle durch, der Build lief nachweislich unter diesem Konto.
+
+## 2026-09-28: Zwei Felder in der Konsole: Begründung für den Kunden und interne Notiz
+
+Kontext: Bisher gab es ein einziges Kommentarfeld, und der ging als „Kommentar des Mitarbeiters“ an das Antwort-Modell. Damit gelangte alles, was dort stand, potenziell zum Kunden, auch interne Einschätzungen. Umgekehrt übernahm Haiku im Test (T03) den Kommentar nicht als Ablehnungsgrund, weil unklar war, ob er für den Kunden gedacht ist.
+
+Entscheidung: zwei getrennte Felder. „Begründung für den Kunden“ (optional, Spalte `freigaben.kommentar`) geht an die endgültige Antwort und an die Vorlage. Der Prompt verlangt, sie sinngemäß wiederzugeben. „Interne Notiz“ (optional, Spalte `freigaben.notiz`) steht nur im Protokoll und in der Konsole. Sie wird für die Antwort gar nicht erst gelesen (`empfehlungen_zum_lauf` lädt sie nicht) und geht nie an ein Modell.
+
+Geprüft ohne Live-Lauf: Ein Test schneidet den kompletten Aufruf an die API mit (System, Nachrichten, Parameter) und belegt, dass die Begründung darin steht und die Notiz nicht. Die Notiz fehlt außerdem in der Vorlage, im Antwort-Protokoll und in der Kundensicht. Als Gegenprobe wurde die Notiz absichtlich in den Prompt eingebaut, dann schlug der Test fehl. Ob Haiku die Begründung jetzt zuverlässig übernimmt, ist live noch nicht gemessen.

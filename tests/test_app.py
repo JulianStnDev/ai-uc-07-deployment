@@ -297,7 +297,7 @@ def test_freigabe_bestaetigen_nur_einmal(client):
     eid = client.app.state.speicher.offene_empfehlungen()[0]["empfehlungs_id"]
     r = client.get("/freigaben")
     assert "Echte Doppelabbuchung" in r.text and "Z005" in r.text and 'class="badge offen">offen<' in r.text
-    r = client.post(f"/freigaben/{eid}", data={"entscheidung": "bestaetigt", "kommentar": " passt "})
+    r = client.post(f"/freigaben/{eid}", data={"entscheidung": "bestaetigt", "begruendung": " passt "})
     assert "Entscheidung gespeichert" in r.text and "Keine offenen Empfehlungen" in r.text
     assert 'class="badge bestaetigt">bestätigt<' in r.text and "100 %" in r.text
     r = client.post(f"/freigaben/{eid}", data={"entscheidung": "abgelehnt"})

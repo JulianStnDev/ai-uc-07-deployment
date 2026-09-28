@@ -417,10 +417,12 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
                      uebergaben=speicher.uebergaben(), hinweis=hinweis)
 
     @app.post("/freigaben/{empfehlungs_id}")
-    async def entscheiden(empfehlungs_id: str, entscheidung: str = Form(""), kommentar: str = Form("")):
+    async def entscheiden(empfehlungs_id: str, entscheidung: str = Form(""), begruendung: str = Form(""),
+                          notiz: str = Form("")):
+        """begruendung geht an den Kunden (über die endgültige Antwort), notiz bleibt intern."""
         if entscheidung not in ("bestaetigt", "abgelehnt"):
             return RedirectResponse("/freigaben?hinweis=ungueltig", status_code=303)
-        ok = speicher.entscheiden(empfehlungs_id, entscheidung, kommentar[:1000])
+        ok = speicher.entscheiden(empfehlungs_id, entscheidung, begruendung[:1000], notiz[:1000])
         if ok:
             hintergrund(antwort_erstellen(speicher.run_id_zur_empfehlung(empfehlungs_id)))  # Variante A
         return RedirectResponse(f"/freigaben?hinweis={'gespeichert' if ok else 'schon_entschieden'}", status_code=303)

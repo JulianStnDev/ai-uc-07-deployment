@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import budget, pruefung
+from app.antwort import antwort_schreiben as echter_antwort_schreiben  # vor dem Fake aus conftest geholt
 from app.main import betriebsdaten, create_app
 from test_app import CODE, cfg, fake_doppelabbuchung, sse_ereignisse, starte, warte_bis_fertig
 from test_oberflaeche import fake_uebergabe, pruefe_infos
@@ -45,7 +46,7 @@ def test_zwischenbescheid_dann_antwort_nach_freigabe(tmp_path, kein_echter_llm_a
     assert "Entwurf des Agents (intern)" in seite                  # Agent-Entwurf nur intern
     assert "Entwurf des Agents (intern)" in c.get("/freigaben").text
     eid = c.app.state.speicher.offene_empfehlungen()[0]["empfehlungs_id"]
-    c.post(f"/freigaben/{eid}", data={"entscheidung": "bestaetigt", "kommentar": "passt"})
+    c.post(f"/freigaben/{eid}", data={"entscheidung": "bestaetigt", "begruendung": "passt"})
     warte(lambda: c.app.state.speicher.antwort(run_id) is not None)
     a = c.app.state.speicher.antwort(run_id)
     assert a["quelle"] == "llm" and a["text"] == "Hallo, deine Erstattung ist freigegeben." and a["kosten_usd"] == 0.01
@@ -62,11 +63,64 @@ def test_ablehnung_und_nur_eine_antwort(tmp_path, kein_echter_llm_aufruf):
     c = app_client(tmp_path)
     run_id = starte(c)
     eid = c.app.state.speicher.offene_empfehlungen()[0]["empfehlungs_id"]
-    c.post(f"/freigaben/{eid}", data={"entscheidung": "abgelehnt", "kommentar": "Vormerkung"})
+    c.post(f"/freigaben/{eid}", data={"entscheidung": "abgelehnt", "begruendung": "Vormerkung"})
     warte(lambda: c.app.state.speicher.antwort(run_id) is not None)
     c.post(f"/freigaben/{eid}", data={"entscheidung": "bestaetigt"})  # schon entschieden: keine zweite Antwort
     assert len(kein_echter_llm_aufruf["antwort"]) == 1
     assert "abgelehnt" in c.app.state.speicher.antwort(run_id)["text"]
+    c.__exit__(None, None, None)
+
+
+NOTIZ = "INTERN-7f3a Kunde wirkt verärgert, Kulanzgrenze erreicht"
+BEGRUENDUNG = "Die Zahlung ist nur vorgemerkt und wird von deiner Bank automatisch freigegeben."
+
+
+class _MitschnittClient:
+    """Stellt sich als Anthropic-Client und schneidet jeden Aufruf mit: Was hier ankommt, sieht das Modell."""
+    def __init__(self):
+        self.aufrufe = []
+        self.messages = self
+
+    def create(self, **kw):
+        from types import SimpleNamespace as NS
+        self.aufrufe.append(kw)
+        return NS(stop_reason="end_turn", content=[NS(type="text", text="Hallo, leider keine Erstattung.")],
+                  usage=NS(input_tokens=4000, output_tokens=200))
+
+
+def test_interne_notiz_landet_nie_im_prompt(tmp_path):
+    client = _MitschnittClient()
+    c = TestClient(create_app(cfg(tmp_path), query_fn=fake_doppelabbuchung([]),
+                              antwort_fn=lambda lauf, emp: echter_antwort_schreiben(client, lauf, emp)))
+    c.__enter__()
+    c.post("/login", data={"code": CODE})
+    run_id = starte(c)
+    sp = c.app.state.speicher
+    eid = sp.offene_empfehlungen()[0]["empfehlungs_id"]
+    c.post(f"/freigaben/{eid}", data={"entscheidung": "abgelehnt", "begruendung": BEGRUENDUNG, "notiz": NOTIZ})
+    warte(lambda: sp.antwort(run_id) is not None)
+    assert len(client.aufrufe) == 1
+    prompt = repr(client.aufrufe[0])                                  # System, Nachrichten, alle Parameter
+    assert BEGRUENDUNG in prompt and "Begründung für den Kunden" in prompt
+    assert "INTERN-7f3a" not in prompt and "Kulanzgrenze" not in prompt
+    assert "INTERN-7f3a" not in (sp.antwort(run_id)["entscheidungen"] or "")  # auch nicht im Antwort-Protokoll
+    assert "INTERN-7f3a" not in c.get(f"/lauf/{run_id}").text              # nicht in der Kundensicht
+    konsole = c.get("/freigaben").text                                      # nur intern sichtbar
+    assert "INTERN-7f3a" in konsole and "Interne Notiz" in konsole
+    assert sp.entschiedene_empfehlungen()[0]["notiz"] == NOTIZ
+    c.__exit__(None, None, None)
+
+
+def test_interne_notiz_nicht_in_der_vorlage(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.antwort.antwort_schreiben", lambda *a, **k: (_ for _ in ()).throw(ConnectionError()))
+    c = app_client(tmp_path)
+    run_id = starte(c)
+    sp = c.app.state.speicher
+    eid = sp.offene_empfehlungen()[0]["empfehlungs_id"]
+    c.post(f"/freigaben/{eid}", data={"entscheidung": "abgelehnt", "begruendung": BEGRUENDUNG, "notiz": NOTIZ})
+    warte(lambda: sp.antwort(run_id) is not None)
+    a = sp.antwort(run_id)
+    assert a["quelle"] == "vorlage" and BEGRUENDUNG in a["text"] and "INTERN-7f3a" not in a["text"]
     c.__exit__(None, None, None)
 
 
