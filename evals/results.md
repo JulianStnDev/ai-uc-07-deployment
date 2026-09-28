@@ -23,3 +23,15 @@ Ein echter Lauf über die neue Oberfläche, geschätzt ca. 0,03 USD.
 Der Entwurf verspricht wieder mehr, als belegt ist („wird dir vollständig erstattet", „mit hoher Priorität", „5–10 Werktage"). Im Portal-Layout fällt das stärker auf, deshalb steht der Entwurf-Hinweis direkt über dem Text.
 
 Bisherige Kosten in UC7 für Kontrollläufe: 0,0678 + 0,0323 = **0,100 USD**.
+
+## Branch (b): Kontrollläufe auf Cloud Run (2026-09-28)
+
+Über die öffentliche URL, Revision `uc7-00002` (1 CPU, 1 GiB, Abrechnung pro Instanz, Concurrency 4), Protokoll in Neon. Geschätzt waren je ca. 0,03 USD.
+
+| Anliegen | Ablauf | Dauer | Kosten | Schritte | Ergebnis |
+|---|---|---|---|---|---|
+| „Doppelt abgebucht beim Jahresabo" (T01) | im Browser bis zum Ende | 39,7 s (erster Schritt sichtbar nach 8,1 s) | 0,0353 USD | 6 | Erstattung Z005 über 54,34 USD empfohlen, wie im Goldset |
+| „Abo kündigen" (T08) | Tab nach 5 s geschlossen | 16,2 s | 0,0242 USD | 4 | Abo von K002 gekündigt, Lauf trotz geschlossenem Tab fertig und mit echten Kosten verbucht |
+| **Summe** | | | **0,0595 USD** | | |
+
+Kontrollläufe in UC7 bisher insgesamt: 0,100 + 0,060 = **0,160 USD**.
