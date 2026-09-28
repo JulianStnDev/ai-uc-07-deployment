@@ -121,3 +121,7 @@ Kontext: Bisher gab es ein einziges Kommentarfeld, und der ging als „Kommentar
 Entscheidung: zwei getrennte Felder. „Begründung für den Kunden“ (optional, Spalte `freigaben.kommentar`) geht an die endgültige Antwort und an die Vorlage. Der Prompt verlangt, sie sinngemäß wiederzugeben. „Interne Notiz“ (optional, Spalte `freigaben.notiz`) steht nur im Protokoll und in der Konsole. Sie wird für die Antwort gar nicht erst gelesen (`empfehlungen_zum_lauf` lädt sie nicht) und geht nie an ein Modell.
 
 Geprüft ohne Live-Lauf: Ein Test schneidet den kompletten Aufruf an die API mit (System, Nachrichten, Parameter) und belegt, dass die Begründung darin steht und die Notiz nicht. Die Notiz fehlt außerdem in der Vorlage, im Antwort-Protokoll und in der Kundensicht. Als Gegenprobe wurde die Notiz absichtlich in den Prompt eingebaut, dann schlug der Test fehl. Ob Haiku die Begründung jetzt zuverlässig übernimmt, ist live noch nicht gemessen.
+
+## 2026-09-28: Keine Mindestinstanz trotz Kaltstart
+
+Gemessen (evals/results.md): Eine Seite braucht kalt 2,3 bis 5,5 s (Median 3,4 s), warm 0,03 s. Beim Agent-Lauf erschien der erste Schritt kalt nach 9,8 s statt warm nach 8,1 s. `--min-instances 1` würde diese rund 3 s sparen. Bei Abrechnung pro Instanz (`--no-cpu-throttling`) läuft die Instanz dann aber rund um die Uhr, das kostet deutlich mehr als die ganze Demo. Entscheidung: min. 0 Instanzen bleiben. Der Kaltstart wird in Kauf genommen.

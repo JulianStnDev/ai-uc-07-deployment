@@ -40,7 +40,7 @@ Neue Version eines Secrets (z. B. nach Passwort-Reset): `versions add` wie oben,
 ### Dienstkonten
 
 - **Laufzeit:** eigenes Konto `uc7-run`, darf nur die vier Secrets lesen (`roles/secretmanager.secretAccessor` je Secret). Kein Editor, kein Zugriff auf andere Dienste.
-- **Build:** Das Compute-Standardkonto `807149335205-compute@…` baut per Cloud Build. Es hat `roles/editor` (automatisch von Google vergeben) und zusätzlich `roles/run.builder`.
+- **Build:** Das Compute-Standardkonto `807149335205-compute@…` baut per Cloud Build. Es hat seit 2026-09-28 **nur `roles/run.builder`** (Editor entzogen, siehe unten).
 
 ### Build-Rechte: was wirklich nötig war
 
@@ -55,7 +55,8 @@ Die ersten zwei Deploys scheiterten mit `PERMISSION_DENIED … could not resolve
 Ergebnis:
 - **Die Bucket-Freigabe war überflüssig** und ist entfernt (2026-09-28, 18:31 UTC). Das folgende Deployment (Revision `uc7-00002`) lief ohne sie durch.
 - **Auch `run.builder` war streng genommen nicht nötig,** weil `roles/editor` alles abdeckt. Die ersten Fehlschläge lagen an der Verteilungszeit: APIs, Build-Konto und Bucket waren erst Minuten alt, und IAM-Änderungen brauchen einige Minuten, bis sie überall gelten.
-- `run.builder` bleibt trotzdem, weil es die von Google dokumentierte Mindestrolle für Source-Deploys ist. Least Privilege wäre, dem Build-Konto `roles/editor` zu entziehen und nur `run.builder` zu behalten (offen, siehe unten).
+- `run.builder` bleibt, weil es die von Google dokumentierte Mindestrolle für Source-Deploys ist.
+- **Editor entzogen (2026-09-28, 18:50 UTC):** `gcloud projects remove-iam-policy-binding focusflow-demo-510014 --member=serviceAccount:807149335205-compute@developer.gserviceaccount.com --role=roles/editor`. Nach 12 Minuten Test-Deployment (Revision `uc7-00003`, 19:03 UTC): erfolgreich, Build lief unter diesem Konto. Keine weitere Rolle nötig.
 
 ## Deploy
 
@@ -84,5 +85,4 @@ gcloud run services logs read uc7 --region europe-west3 --limit 50
 
 ## Offen
 
-- **Build-Konto ohne Editor:** `gcloud projects remove-iam-policy-binding focusflow-demo-510014 --member=serviceAccount:807149335205-compute@developer.gserviceaccount.com --role=roles/editor` würde das Konto auf `run.builder` beschränken. Nicht ausgeführt, weil es über die ursprüngliche Aufgabe hinausgeht. Danach einen Deploy zur Kontrolle.
 - **Startguthaben:** Welches der beiden Billing-Konten „Mein Rechnungskonto“ das Startguthaben hat, zeigt die API nicht. In der Console: Abrechnung → Konto wählen → „Guthaben“.

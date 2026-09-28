@@ -1,11 +1,13 @@
 {
   "title": "Deployment: Support-Agent als Web-Demo",
-  "status": "active",
+  "status": "done",
   "tags": [
     "deployment",
     "agents",
     "cloud-run",
-    "sse"
+    "sse",
+    "monitoring",
+    "llm-judge"
   ],
-  "summary": "UC4-Support-Agent als Web-Demo mit Zugangscode, Live-Anzeige der Werkzeugaufrufe, Freigabe-Seite für Erstattungen und hartem Monatsbudget von 5 USD"
+  "summary": "UC4-Support-Agent als Web-Demo auf Cloud Run: Zugangscode, Live-Anzeige per SSE, Freigabe durch Menschen vor jeder Erstattungsantwort, Stichproben-Judge, Betriebsseite und hartes Monatsbudget von 5 USD"
 }

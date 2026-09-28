@@ -35,3 +35,64 @@ Bisherige Kosten in UC7 für Kontrollläufe: 0,0678 + 0,0323 = **0,100 USD**.
 | **Summe** | | | **0,0595 USD** | | |
 
 Kontrollläufe in UC7 bisher insgesamt: 0,100 + 0,060 = **0,160 USD**.
+
+## Branch (c): Variante A, Judge, Kaltstart (2026-09-28)
+
+### Variante A über die öffentliche URL
+
+Drei echte Läufe, Revision `uc7-00003`. Geschätzt waren ca. 0,12 USD.
+
+| Anliegen | Entscheidung in der Konsole | Ergebnis |
+|---|---|---|
+| T01, Doppelabbuchung (`20260928-190527-a9c291`) | bestätigt | Zwischenbescheid, danach endgültige Antwort mit Freigabe über 54,34 USD. Keine Werktage-Angabe mehr. Judge: keine Spekulation ✓, keine Zusage ✓ |
+| T03 (`20260928-190925-6adcad`) | abgelehnt, mit Kommentar | Endgültige Antwort ohne Zusage. Der Kommentar wurde **nicht** als Grund übernommen, daraus entstanden die getrennten Felder „Begründung für den Kunden“ und „Interne Notiz“ (docs/decisions.md) |
+| T15 (`20260928-190959-e0f2e4`) | keine Empfehlung | Agent-Entwurf direkt sichtbar, kein Zwischenbescheid |
+
+Regelprüfungen ohne LLM: 5 von 5 Regeln bei allen Läufen erfüllt.
+
+Screenshots: [Zwischenbescheid](../docs/screenshots/betrieb/1-zwischenbescheid.png), [Konsole](../docs/screenshots/betrieb/2-konsole.png), [Antwort nach Freigabe](../docs/screenshots/betrieb/3-antwort-fall1.png), [Antwort nach Ablehnung](../docs/screenshots/betrieb/3-antwort-fall2.png), [Betriebsseite](../docs/screenshots/betrieb/4-betrieb.png).
+
+### Kaltstart
+
+Revision `uc7-00003` (1 CPU, 1 GiB, gen2, min. 0 Instanzen). Vor jeder Messung mindestens 20 min ohne Anfrage, geprüft über die Request-Logs. Dass wirklich eine neue Instanz startete, zeigt je ein Eintrag „Started server process“ in Cloud Logging, 0–3 s nach der Messanfrage. Seitenmessung: `GET /login` von hier (Deutschland), danach dieselbe Anfrage warm.
+
+| Nr. | Zeit (UTC) | Art | kalt | warm | Instanzstart im Log |
+|---|---|---|---|---|---|
+| 1 | 18:57 | Seite | 2,33 s | 0,04 s | 18:57:16,8 |
+| 2 | 19:30 | Seite | 3,53 s | 0,03 s | 19:30:55,9 |
+| 3 | 19:52 | Seite | 3,24 s | 0,03 s | 19:52:36,4 |
+| 4 | 20:14 | Seite | 3,42 s | 0,03 s | 20:14:16,9 |
+| 5 | 20:35 | Seite | 5,50 s | 0,03 s | 20:35:58,6 |
+| 6 | 20:57 | Agent-Lauf T08 „Abo kündigen“ (`20260928-205738-4202e5`) | Login 3,09 s, erster Schritt nach 9,81 s, fertig nach 21,54 s | – | 20:57:37,9 |
+
+Seite: Median 3,42 s kalt gegen 0,03 s warm. Der Kaltstart kostet also rund 3 bis 5 s. Beim Agent-Lauf fällt er kaum ins Gewicht: Der erste Schritt erschien nach 9,8 s (warm in Branch (b): 8,1 s), der Lauf war mit 18,0 s Agent-Dauer im üblichen Rahmen. Eine Mindestinstanz (`--min-instances 1`) würde ca. 3 s sparen, bei Abrechnung pro Instanz aber durchgehend kosten. Für eine Demo lohnt sich das nicht.
+
+Kosten des Kaltstart-Laufs: 0,0183 USD Agent plus 0,0065 USD Judge (Stichprobe) = **0,025 USD** (geschätzt 0,025 USD). Eine frühere Fassung des Messskripts lief warm statt kalt (0,017 USD, verworfen).
+
+Nebenbefund: Das Messskript meldete die Messungen 2 bis 6 zunächst als „nicht bestätigt“. Es suchte den Instanzstart *vor* der Anfrage, obwohl der Prozess erst *durch* die Anfrage startet. Die Tabelle oben ist gegen die Logs nachgeprüft.
+
+### Betriebszahlen September (Neon, Stand 20:59 UTC)
+
+| Kennzahl | Wert |
+|---|---|
+| Läufe (alle fertig, 0 Fehler, 0 verfallen) | 7 |
+| Dauer Median / p95 (n = 7, p95 = längster Lauf) | 20,0 s / 39,7 s |
+| Kosten Agent / Judge / endgültige Antworten | 0,170 / 0,044 / 0,009 USD |
+| Kosten je Lauf, alles eingerechnet | 0,032 USD, also **31,9 USD je 1000** |
+| Judge-Urteile (Stichprobe und Hand) | 3, davon keine Spekulation 3/3, keine Zusage 3/3 |
+| Regelprüfungen | 4 Läufe, alle 5 Regeln 4/4 |
+| Erstattungsempfehlungen entschieden | 2, davon 1 bestätigt (bewusst eine Ablehnung zum Testen) |
+
+Die Stichprobe ist klein. Das ist ein Betriebsnachweis, keine Qualitätsaussage wie die 45 Läufe in UC4.
+
+### Kosten Branch (c)
+
+| Posten | USD |
+|---|---|
+| Kalibrierung Judge (Sonnet + Haiku, je 10 Läufe) | 0,281 |
+| Validierung Variante A (3 Läufe, Antworten, Judge) | 0,122 |
+| Kaltstart-Lauf aus warmer Instanz (verworfen) | 0,017 |
+| Kaltstart-Lauf | 0,025 |
+| **Summe** | **0,445** |
+
+UC7 insgesamt bisher: Kontrollläufe (a)/(b) 0,160 + Branch (c) 0,445 = **0,605 USD**.
