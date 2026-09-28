@@ -1,0 +1,37 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support-Konsole · FocusFlow Support-Demo</title><link rel="stylesheet" href="portal.css"></head><body>
+<header class="kopf"><div class="kopf-innen">
+  <a class="logo" href="start.html"><span class="logo-zeichen" aria-hidden="true">F</span>FocusFlow <small>Support-Demo</small></a>
+  <nav class="navi" aria-label="Hauptnavigation">
+    <a href="start.html">Start</a><a href="ticket-neu.html">Anliegen stellen</a><a href="konsole.html" aria-current="page">Support-Konsole <span class="zaehler" aria-label="1 offen">1</span></a>
+  </nav>
+  <span class="budget">Budget 0,03 / 4,50 USD <span class="budget-balken" aria-hidden="true"><span style="width:1%"></span></span><span class="info rechts"><button type="button" class="info-knopf" aria-expanded="false" aria-controls="info-18" aria-label="Erklärung: Budget">i</button><span class="info-text" id="info-18" role="note" hidden>Jede Anfrage an das KI-Modell kostet ein paar Cent. Die Demo hat ein festes Monatsbudget. Ist es aufgebraucht, macht sie bis zum Monatsanfang Pause.</span></span></span>
+  <button class="abmelden">Abmelden</button>
+</div></header>
+<main class="seite">
+<div class="kopfzeile-seite"><div><p class="ueberzeile">Support-Konsole</p><h1>Freigaben <span class="info"><button type="button" class="info-knopf" aria-expanded="false" aria-controls="info-14" aria-label="Erklärung: Freigaben">i</button><span class="info-text" id="info-14" role="note" hidden>Hier entscheidet ein Mensch über die Erstattungen, die der Agent empfohlen hat. In der Demo wird nichts gebucht, aber jede Entscheidung wird festgehalten.</span></span></h1>
+  <p class="leise" style="margin-top:6px">Der Agent empfiehlt Erstattungen, du entscheidest. Schattenmodus <span class="info"><button type="button" class="info-knopf" aria-expanded="false" aria-controls="info-15" aria-label="Erklärung: Schattenmodus">i</button><span class="info-text" id="info-15" role="note" hidden>Schattenmodus heißt: Der Agent empfiehlt, ein Mensch entscheidet. So lässt sich messen, wie oft der Agent richtig lag, bevor man ihm mehr zutraut.</span></span></p></div></div>
+<div class="statistik">
+  <div class="karte stat"><div class="titel">Offen</div><div class="wert">1</div></div>
+  <div class="karte stat"><div class="titel">Entschieden</div><div class="wert">3</div></div>
+  <div class="karte stat"><div class="titel">Bestätigungsquote <span class="info rechts"><button type="button" class="info-knopf" aria-expanded="false" aria-controls="info-16" aria-label="Erklärung: Bestätigungsquote">i</button><span class="info-text" id="info-16" role="note" hidden>Anteil der Empfehlungen, die ein Mensch bestätigt hat. Hohe Werte sprechen dafür, dem Agent hier später mehr selbst zu überlassen.</span></span></div><div class="wert">67 %</div><div class="sehr-leise">2 von 3 bestätigt</div></div>
+</div>
+<h2 class="abschnitt-titel">Offene Empfehlungen <span class="badge offen">1</span></h2>
+
+<article class="karte fall">
+  <div>
+    <div class="fall-kopf"><span class="betrag">54,34 USD</span><span class="badge offen">offen</span><span class="sehr-leise">empfohlen 28.09.2026, 13:11</span></div>
+    <dl class="fall-fakten"><dt>Kunde</dt><dd>Anna Berger (K001) · Pro jährlich · Web</dd><dt>Zahlung</dt><dd>Z005 · 14.09.2026 · 54,34 USD · Wechsel auf Pro jährlich</dd><dt>Anliegen</dt><dd>„… wurden mir 54,34 $ ZWEI MAL abgebucht …" · <a href="ticket-ergebnis.html">ganzen Fall ansehen</a></dd></dl>
+    <div class="begruendung"><strong>Begründung des Agents:</strong> Doppelte Belastung beim Wechsel auf Jahresabo am 14.09.2026. Beide Zahlungen (Z004 und Z005) sind identisch und nach über einer Woche echte Abbuchungen. Volle Erstattung der zweiten Zahlung gemäß Regel für doppelte Belastungen.</div>
+  </div>
+  <form class="entscheidung" aria-label="Entscheidung zu 54,34 USD für Anna Berger">
+    <label for="k1" class="sehr-leise" style="font-weight:500">Kommentar (optional)</label><input id="k1" placeholder="z. B. Grund der Ablehnung">
+    <button class="knopf gruen" type="button">✓ Bestätigen</button><button class="knopf rot" type="button">Ablehnen</button>
+  </form>
+</article>
+<h2 class="abschnitt-titel">Zuletzt entschieden</h2>
+<div class="karte" style="padding:16px 12px"><table class="tabelle"><thead><tr><th>Zeit</th><th>Kunde</th><th>Betrag</th><th>Status</th><th>Kommentar</th><th></th></tr></thead><tbody><tr><td>27.09., 18:02</td><td>Ben Hoffmann</td><td><strong>6,99 USD</strong></td><td><span class="badge abgelehnt">abgelehnt</span></td><td class="leise">Nur Vormerkung, keine zweite Abbuchung</td><td><a href="ticket-ergebnis.html">Fall</a></td></tr><tr><td>27.09., 17:40</td><td>Hannah Fischer</td><td><strong>59,00 USD</strong></td><td><span class="badge bestaetigt">bestätigt</span></td><td class="leise">Innerhalb 14 Tage, passt</td><td><a href="ticket-ergebnis.html">Fall</a></td></tr><tr><td>27.09., 16:15</td><td>Max Wolf</td><td><strong>6,99 USD</strong></td><td><span class="badge bestaetigt">bestätigt</span></td><td class="leise">–</td><td><a href="ticket-ergebnis.html">Fall</a></td></tr></tbody></table></div>
+<h2 class="abschnitt-titel">Übergaben an Menschen <span class="info"><button type="button" class="info-knopf" aria-expanded="false" aria-controls="info-17" aria-label="Erklärung: Übergabe an Mensch">i</button><span class="info-text" id="info-17" role="note" hidden>Ist ein Fall unklar oder liegt er außerhalb seiner Befugnisse, gibt der Agent ihn an einen Menschen ab, statt zu raten.</span></span></h2>
+<div class="karte"><p class="leise">1 Fall wurde übergeben: <strong>Ben Hoffmann</strong> · „Kunde meldet doppelte Abbuchung, im Konto nur eine Zahlung sichtbar." <a href="ticket-ergebnis.html">Fall ansehen</a></p></div></main>
+<footer class="fuss">Demo mit erfundenen Kundendaten und einem echten KI-Modell (Claude Haiku 4.5). Es wird nichts versendet und nichts gebucht.</footer>
+<script src="info.js"></script></body></html>
