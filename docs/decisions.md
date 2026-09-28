@@ -57,3 +57,13 @@ Entscheidung: (b). Der Task meldet jedes Ereignis an einen Beobachter. Beliebig 
 Folge für Branch (b): Cloud Run teilt CPU standardmäßig nur während aktiver Requests zu. Solange die Seite offen ist, hält der SSE-Request die Instanz aktiv. Schließt der Besucher den Tab mitten im Lauf, kann der Task gedrosselt werden. In (b) prüfen, ob „instance-based billing" nötig ist oder der Lauf an den Request gebunden werden soll.
 
 Umsetzung Agent: Der UC4-Code ist nach `uc4_agent/` kopiert, einzige Änderung ist die herausgelöste Funktion `baue_optionen`. Die Web-App nutzt sie unverändert (per Test abgesichert). Der Werkzeugkasten wird nur um eine Meldung je Aufruf erweitert (Unterklasse `WebKasten`), die Werkzeuge selbst bleiben gleich.
+
+## 2026-09-28: Oberfläche als Kundenportal, Zeitleiste ohne Deutungen
+
+Kontext: Die Demo soll in 30 Sekunden verständlich sein, auch ohne AI-Hintergrund (Recruiter, Gründer). Funktion und Agent-Logik bleiben unverändert.
+
+Entscheidung: Startseite mit „So funktioniert diese Demo“ (drei Schritte) und zwei Wegen. Die Anliegen-Seite ist geteilt: links das Kundenportal mit dem Antwortentwurf so, wie der Kunde ihn bekäme (mit Hinweis „Entwurf, wird vor Versand geprüft“), rechts „Hinter den Kulissen“ als Zeitleiste in Alltagssprache mit aufklappbaren Rohdaten. Die Support-Konsole zeigt Freigaben als Karten mit Status-Badges, Bestätigungsquote und Übergaben an Menschen. Erklärungsbedürftige Stellen haben Info-Hinweise („i“), die per Klick, Tastatur und Screenreader funktionieren. Stil: hell, eine Akzentfarbe, eigenes kleines CSS, htmx bleibt.
+
+**Die Zeitleiste zeigt nur, was der Agent gesehen und geschlossen hat, keine Deutungen der Oberfläche.** Beispiel: Bei den Zahlungen steht „5 Zahlungen gefunden“ plus Liste, nicht „darunter zweimal 54,34 USD“. Begründung: Hebt die Oberfläche etwas hervor, sieht es so aus, als hätte der Agent es erkannt. Das würde seine Leistung in der Demo besser aussehen lassen, als sie ist, und die Bewertung durch den Menschen in der Konsole beeinflussen. Schlüsse des Agents stehen in seinen eigenen Notizen und in seiner Empfehlung, die die Zeitleiste wörtlich wiedergibt.
+
+Titel eines Anliegens: das Label des Beispiel-Chips, wenn der Text unverändert ist, sonst die ersten Wörter. Kein LLM, damit ein Titel nichts kostet und nichts hinzudichtet.

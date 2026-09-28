@@ -1,0 +1,40 @@
+<ol class="zeitleiste">
+  {% if ergebnis.fehlertext %}
+  <li class="ereignis fehler"><span class="punkt" aria-hidden="true">!</span>
+    <div class="ereignis-titel">Abgebrochen</div><div class="ereignis-text">{{ ergebnis.fehlertext }}</div></li>
+  {% endif %}
+  {% if ergebnis.pflichten_offen %}
+  <li class="ereignis fehler"><span class="punkt" aria-hidden="true">!</span>
+    <div class="ereignis-titel">Nicht alles erledigt</div>
+    <div class="ereignis-text">Offen geblieben: {{ ergebnis.pflichten_offen | join(", ") }}</div></li>
+  {% endif %}
+  <li class="ereignis fertig"><span class="punkt" aria-hidden="true">✓</span>
+    <div class="ereignis-titel">{{ "Fertig" if ergebnis.status == "fertig" else "Beendet" }}</div>
+    <dl class="kennzahlen">
+      <div class="kennzahl"><dt>Dauer</dt><dd>{{ ergebnis.dauer_s | string | replace(".", ",") }} s</dd></div>
+      <div class="kennzahl"><dt>Kosten {{ info("kosten", "Kosten") }}</dt><dd>{{ ergebnis.kosten_usd | usd }}</dd></div>
+      <div class="kennzahl"><dt>Schritte {{ info("schritte", "Schritte", true) }}</dt><dd>{{ ergebnis.num_turns if ergebnis.num_turns is not none else "–" }}</dd></div>
+    </dl>
+    {% if ergebnis.kosten_pauschal %}<p class="sehr-leise">Kosten als Pauschale verbucht, weil das SDK keine Angabe geliefert hat.</p>{% endif %}
+    {% if ergebnis.eingriffe %}<p class="sehr-leise" style="margin-top: 6px;">Der Programmcode hat den Agent {{ ergebnis.eingriffe }}× an eine Pflicht erinnert. {{ info("erinnerung", "Erinnerung durch den Code") }}</p>{% endif %}
+  </li>
+</ol>
+{% if empfehlungen or ergebnis.uebergaben or ergebnis.kuendigungen %}
+<div class="ergebnis-liste">
+  <h3>Was jetzt passiert</h3>
+  <ul>
+    {% for e in empfehlungen %}
+    <li>Erstattung über <strong>{{ e.betrag_usd | usd }}</strong> empfohlen {{ info("empfehlung", "Empfehlung statt Erstattung") }}
+      {% if e.entscheidung == "bestaetigt" %}<span class="badge bestaetigt">bestätigt</span>
+      {% elif e.entscheidung == "abgelehnt" %}<span class="badge abgelehnt">abgelehnt</span>
+      {% else %}<span class="badge offen">offen</span> <a href="/freigaben">zur Support-Konsole →</a>{% endif %}</li>
+    {% endfor %}
+    {% for u in ergebnis.uebergaben %}
+    <li>An einen Menschen übergeben {{ info("uebergabe", "Übergabe an Mensch") }} <span class="badge neutral">Priorität {{ u.prioritaet }}</span></li>
+    {% endfor %}
+    {% for k in ergebnis.kuendigungen %}
+    <li>Abo gekündigt zum {{ k.wirksam_zum | datum }} {{ info("kuendigung", "Kündigung") }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}

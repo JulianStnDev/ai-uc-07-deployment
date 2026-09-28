@@ -1,0 +1,3 @@
+{% if ergebnis.status == "fertig" and not ergebnis.pflichten_offen %}<span class="badge bestaetigt">fertig</span>
+{% elif ergebnis.status == "fertig" %}<span class="badge offen">fertig, unvollständig</span>
+{% else %}<span class="badge abgelehnt">abgebrochen</span>{% endif %}

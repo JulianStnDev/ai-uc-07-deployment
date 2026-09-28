@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS laeufe (
     kunden_id       TEXT NOT NULL,
     absender        TEXT NOT NULL,
     text            TEXT NOT NULL,
+    titel           TEXT,                       -- Chip-Label oder erste Wörter (kein LLM)
     status          TEXT NOT NULL,              -- laeuft | fertig | fehler | abgebrochen
     kosten_usd      REAL,                       -- SDK-Schätzung oder Pauschale
     kosten_pauschal INTEGER NOT NULL DEFAULT 0, -- 1 = keine Kostenangabe, Deckel verbucht
@@ -52,14 +53,18 @@ class Speicher:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys = ON")
         self.db.executescript(SCHEMA)
+        spalten = {r["name"] for r in self.db.execute("PRAGMA table_info(laeufe)")}
+        if "titel" not in spalten:  # Datenbank aus Branch (a)
+            self.db.execute("ALTER TABLE laeufe ADD COLUMN titel TEXT")
 
     # ---------- Läufe ----------
 
-    def lauf_anlegen(self, run_id: str, kunden_id: str, absender: str, text: str) -> None:
+    def lauf_anlegen(self, run_id: str, kunden_id: str, absender: str, text: str, titel: str | None = None) -> None:
         with self.db:
             self.db.execute(
-                "INSERT INTO laeufe (run_id, erstellt, kunden_id, absender, text, status) VALUES (?, ?, ?, ?, ?, 'laeuft')",
-                (run_id, jetzt_iso(), kunden_id, absender, text))
+                "INSERT INTO laeufe (run_id, erstellt, kunden_id, absender, text, titel, status) "
+                "VALUES (?, ?, ?, ?, ?, ?, 'laeuft')",
+                (run_id, jetzt_iso(), kunden_id, absender, text, titel))
 
     def lauf_abschliessen(self, run_id: str, *, status: str, kosten_usd: float, kosten_pauschal: bool,
                           dauer_s: float, ergebnis: dict, ereignisse: list, empfehlungen: list[dict]) -> None:
@@ -112,12 +117,12 @@ class Speicher:
 
     def offene_empfehlungen(self) -> list[dict]:
         return [dict(r) for r in self.db.execute(
-            "SELECT e.*, l.text AS ticket_text FROM empfehlungen e JOIN laeufe l USING (run_id) "
+            "SELECT e.*, l.text AS ticket_text, l.titel FROM empfehlungen e JOIN laeufe l USING (run_id) "
             "LEFT JOIN freigaben f USING (empfehlungs_id) WHERE f.empfehlungs_id IS NULL ORDER BY e.erstellt")]
 
     def entschiedene_empfehlungen(self, limit: int = 20) -> list[dict]:
         return [dict(r) for r in self.db.execute(
-            "SELECT e.*, f.entscheidung, f.kommentar, f.entschieden FROM empfehlungen e "
+            "SELECT e.*, f.entscheidung, f.kommentar, f.entschieden, l.titel FROM empfehlungen e JOIN laeufe l USING (run_id) "
             "JOIN freigaben f USING (empfehlungs_id) ORDER BY f.entschieden DESC LIMIT ?", (limit,))]
 
     def empfehlungen_zum_lauf(self, run_id: str) -> list[dict]:
@@ -137,6 +142,17 @@ class Speicher:
         except sqlite3.IntegrityError:  # schon entschieden oder Empfehlung gibt es nicht
             return False
         return True
+
+    def uebergaben(self, limit: int = 20) -> list[dict]:
+        """Fälle, die der Agent an einen Menschen übergeben hat (aus dem Ergebnis der Läufe)."""
+        faelle = []
+        for r in self.db.execute(
+                "SELECT run_id, erstellt, kunden_id, titel, text, ergebnis FROM laeufe "
+                "WHERE ergebnis LIKE '%uebergabe_id%' ORDER BY erstellt DESC LIMIT ?", (limit,)):
+            for u in json.loads(r["ergebnis"]).get("uebergaben", []):
+                faelle.append({"run_id": r["run_id"], "erstellt": r["erstellt"], "kunden_id": r["kunden_id"],
+                               "titel": r["titel"], "grund": u["grund"], "prioritaet": u["prioritaet"]})
+        return faelle
 
     def freigabe_statistik(self) -> dict:
         r = self.db.execute(

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block titel %}Support-Konsole{% endblock %}
+{% block inhalt %}
+<div class="kopfzeile-seite"><div>
+  <p class="ueberzeile">Support-Konsole</p>
+  <h1>Freigaben {{ info("freigabe", "Freigaben") }}</h1>
+  <p class="leise" style="margin-top: 6px;">Der Agent empfiehlt Erstattungen, du entscheidest. Schattenmodus {{ info("schatten", "Schattenmodus") }}</p>
+</div></div>
+{% if hinweis == "gespeichert" %}<p class="meldung ok" role="status">Entscheidung gespeichert.</p>
+{% elif hinweis == "schon_entschieden" %}<p class="meldung fehler" role="alert">Über diese Empfehlung wurde schon entschieden.</p>
+{% elif hinweis == "ungueltig" %}<p class="meldung fehler" role="alert">Bitte „Bestätigen“ oder „Ablehnen“ wählen.</p>{% endif %}
+
+<div class="statistik">
+  <div class="karte stat"><div class="titel">Offen</div><div class="wert">{{ offen | length }}</div></div>
+  <div class="karte stat"><div class="titel">Entschieden</div><div class="wert">{{ statistik.gesamt }}</div></div>
+  <div class="karte stat"><div class="titel">Bestätigungsquote {{ info("quote", "Bestätigungsquote", true) }}</div>
+    <div class="wert">{% if statistik.gesamt %}{{ (100 * statistik.bestaetigt / statistik.gesamt) | round | int }} %{% else %}–{% endif %}</div>
+    <div class="sehr-leise">{{ statistik.bestaetigt }} von {{ statistik.gesamt }} bestätigt</div></div>
+</div>
+
+<h2 class="abschnitt-titel">Offene Empfehlungen <span class="badge offen">{{ offen | length }}</span></h2>
+{% if not offen %}<div class="karte"><p class="leise">Keine offenen Empfehlungen. Stell <a href="/anliegen">als Kunde ein Anliegen</a>, zum Beispiel zu einer doppelten Abbuchung.</p></div>{% endif %}
+<div class="stapel">
+{% for e in offen %}
+{% set z = zahlungen.get(e.zahlungs_id) %}
+{% set k = kunden[e.kunden_id] %}
+<article class="karte fall" aria-labelledby="fall-{{ loop.index }}">
+  <div>
+    <div class="fall-kopf"><span class="betrag" id="fall-{{ loop.index }}">{{ e.betrag_usd | usd }}</span><span class="badge offen">offen</span>
+      <span class="sehr-leise">empfohlen {{ e.erstellt | datum }} UTC</span></div>
+    <dl class="fall-fakten">
+      <dt>Kunde</dt><dd>{{ k.name }} ({{ k.kunden_id }}) · {{ k | abo }}</dd>
+      {% if z %}<dt>Zahlung</dt><dd>{{ z.zahlungs_id }} · {{ z.datum | datum }} · {{ z.betrag_usd | usd }} · {{ z.beschreibung }}</dd>{% endif %}
+      <dt>Anliegen</dt><dd>{{ e.titel or e.ticket_text[:60] }} · <a href="/lauf/{{ e.run_id }}">ganzen Fall ansehen</a></dd>
+    </dl>
+    <div class="begruendung"><strong>Begründung des Agents:</strong> {{ e.begruendung }}</div>
+  </div>
+  <form class="entscheidung" method="post" action="/freigaben/{{ e.empfehlungs_id }}" aria-label="Entscheidung zu {{ e.betrag_usd | usd }} für {{ k.name }}">
+    <label for="k-{{ loop.index }}" class="sehr-leise" style="font-weight: 500;">Kommentar (optional)</label>
+    <input id="k-{{ loop.index }}" name="kommentar" maxlength="1000" placeholder="z. B. Grund der Ablehnung">
+    <button class="knopf gruen" name="entscheidung" value="bestaetigt">✓ Bestätigen</button>
+    <button class="knopf rot" name="entscheidung" value="abgelehnt">Ablehnen</button>
+  </form>
+</article>
+{% endfor %}
+</div>
+
+{% if entschieden %}
+<h2 class="abschnitt-titel">Zuletzt entschieden</h2>
+<div class="karte" style="padding: 16px 12px;">
+  <table class="tabelle">
+    <thead><tr><th>Zeit (UTC)</th><th>Kunde</th><th>Betrag</th><th>Status</th><th>Kommentar</th><th><span class="nur-sr">Fall</span></th></tr></thead>
+    <tbody>
+    {% for e in entschieden %}
+    <tr>
+      <td>{{ e.entschieden | datum }}</td>
+      <td>{{ kunden[e.kunden_id].name }}</td>
+      <td><strong>{{ e.betrag_usd | usd }}</strong></td>
+      <td>{% if e.entscheidung == "bestaetigt" %}<span class="badge bestaetigt">bestätigt</span>{% else %}<span class="badge abgelehnt">abgelehnt</span>{% endif %}</td>
+      <td class="leise">{{ e.kommentar or "–" }}</td>
+      <td><a href="/lauf/{{ e.run_id }}">Fall</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<h2 class="abschnitt-titel">Übergaben an Menschen {{ info("uebergabe", "Übergabe an Mensch") }}</h2>
+{% if uebergaben %}
+<div class="stapel">
+{% for u in uebergaben %}
+<div class="karte uebergabe"><div class="fall-kopf"><strong>{{ kunden[u.kunden_id].name }}</strong>
+  <span class="badge {{ 'abgelehnt' if u.prioritaet == 'hoch' else 'neutral' }}">Priorität {{ u.prioritaet }}</span>
+  <span class="sehr-leise">{{ u.erstellt | datum }} UTC{% if u.titel %} · {{ u.titel }}{% endif %}</span></div>
+  <p class="leise" style="margin-top: 6px;">{{ u.grund }} · <a href="/lauf/{{ u.run_id }}">Fall ansehen</a></p></div>
+{% endfor %}
+</div>
+{% else %}
+<div class="karte"><p class="leise">Noch keine Übergaben.</p></div>
+{% endif %}
+{% endblock %}

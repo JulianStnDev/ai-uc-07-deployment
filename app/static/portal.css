@@ -196,3 +196,23 @@ input:focus, select:focus, textarea:focus { border-color: var(--akzent); outline
   .tabelle td { border: 0; padding: 2px 0; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---------- Ergänzungen für die App ---------- */
+.schritte3 { list-style: none; padding: 0; margin-top: 0; }
+.h3 { font-size: 1rem; }
+h2.ueberzeile { font-size: .78rem; }
+.meldung { padding: 12px 16px; border-radius: 10px; background: var(--gelb-hell); color: #5c4200; margin-bottom: var(--a4); }
+.meldung.fehler { background: var(--rot-hell); color: #7d231f; }
+.meldung.ok { background: var(--gruen-hell); color: #145c3c; }
+.avatar.mini { width: 22px; height: 22px; font-size: .65rem; }
+.punkt-klein { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--akzent); margin-right: 6px; animation: puls 1.2s infinite; }
+.ergebnis-liste { margin-top: var(--a2); padding: var(--a4); background: var(--flaeche); border: 1px solid var(--linie); border-radius: 10px; }
+.ergebnis-liste h3 { font-size: .9rem; margin-bottom: 6px; }
+.ergebnis-liste ul { margin: 0; padding-left: 18px; font-size: .92rem; }
+.ergebnis-liste li { margin: 4px 0; }
+.navi form, .kopf-innen form { margin: 0; }
+.feld-kopf { display: flex; align-items: center; gap: 6px; margin-bottom: var(--a2); }
+.feld-kopf label { margin: 0; }
+@media (max-width: 820px) { .kopf-innen .budget { margin-left: 0; flex: 1; } }
+.budget { white-space: nowrap; }
+@media (max-width: 820px) { .budget-balken { width: 44px; } }

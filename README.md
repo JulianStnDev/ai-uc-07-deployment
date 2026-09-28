@@ -1,6 +1,10 @@
 # UC7 — Deployment: Der Support-Agent als Web-Demo
 
-> Stand: Branch (a), lokal lauffähig mit Dockerfile. Deployment (Cloud Run + Neon) folgt in Branch (b), Monitoring in (c).
+> Stand: Branch (a) lokal lauffähig mit Dockerfile, Oberfläche als Kundenportal überarbeitet. Deployment (Cloud Run + Neon) folgt in Branch (b), Monitoring in (c).
+
+| Anliegen mit Ergebnis | Support-Konsole |
+|---|---|
+| ![Anliegen](docs/screenshots/app/lauf-ergebnis-desktop.png) | ![Konsole](docs/screenshots/app/konsole-desktop.png) |
 
 ## Problem
 Der Support-Agent aus UC4 (Claude Agent SDK, Haiku 4.5, eigener MCP-Server) lief bisher nur als Skript. UC7 bringt ihn als Web-Demo online: Besucher mit Zugangscode schicken Tickets, sehen live, welche Werkzeuge der Agent aufruft, und ein Mensch entscheidet auf einer Freigabe-Seite über Erstattungsempfehlungen. Diese Entscheidungen sind die Datenbasis für die spätere Frage, ob Erstattungen autonom werden dürfen.
@@ -17,7 +21,8 @@ Browser ──POST /lauf──▶ FastAPI ──asyncio-Task──▶ uc4_agent 
                            └──▶ SQLite (Branch a) / Neon (Branch b): Läufe, Kosten, Empfehlungen, Freigaben
 ```
 - `uc4_agent/`: Kopie des UC4-Agents (Prompt v3, Stop-Hook, Autonomie-Matrix unverändert), Herkunft in `uc4_agent/HERKUNFT.md`.
-- `app/`: Web-App. `lauf.py` führt ein Ticket aus, `budget.py` rechnet den Monatsdeckel, `speicher.py` ist das Protokoll, `main.py` die Routen.
+- `app/`: Web-App. `lauf.py` führt ein Anliegen aus, `budget.py` rechnet den Monatsdeckel, `speicher.py` ist das Protokoll, `main.py` die Routen, `darstellung.py` die Texte der Zeitleiste, `hinweise.py` die Info-Hinweise und die Titelregel.
+- Seiten: `/` Start, `/anliegen` Kundenportal, `/lauf/{id}` Portal + „Hinter den Kulissen“ (live per SSE), `/freigaben` Support-Konsole.
 
 ## Lokal starten
 

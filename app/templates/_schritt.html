@@ -1,11 +1,7 @@
-{% if e.art == "text" %}
-<li class="schritt text"><span class="etikett">Agent</span> {{ e.text }}</li>
-{% else %}
-<li class="schritt werkzeug{% if s.fehler %} fehler{% endif %}">
-  <span class="etikett">{{ s.titel }}</span>
-  {% if s.blockiert %}<span class="marke rot">blockiert</span>{% elif s.fehler %}<span class="marke rot">Fehler</span>{% endif %}
-  <code class="eingabe">{{ s.eingabe_kurz }}</code>
-  <ul>{% for z in s.zeilen %}<li>{{ z }}</li>{% endfor %}</ul>
-  <details><summary>Ein- und Ausgabe</summary><pre>{{ s.roh }}</pre></details>
+<li class="ereignis {{ s.klasse }}"><span class="punkt" aria-hidden="true">{{ s.symbol }}</span>
+  <div class="ereignis-titel">{{ s.titel }}{% if s.info %} {{ info(s.info, s.titel) }}{% endif %}</div>
+  {% if s.notiz %}<div class="gedanke">„{{ s.text }}“</div>
+  {% else %}<div class="ereignis-text">{{ s.text }}{% if s.badge %} <span class="badge {{ s.badge[0] }}">{{ s.badge[1] }}</span>{% endif %}
+    {% if s.liste %}<ul>{% for z in s.liste %}<li>{{ z }}</li>{% endfor %}</ul>{% endif %}</div>{% endif %}
+  {% if s.roh %}<details class="roh"><summary>Rohdaten</summary><pre>{{ s.roh }}</pre></details>{% endif %}
 </li>
-{% endif %}
