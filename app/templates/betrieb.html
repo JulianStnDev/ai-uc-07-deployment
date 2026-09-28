@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block titel %}Betrieb{% endblock %}
+{% block inhalt %}
+{% macro usd4(x) %}{{ "–" if x is none else ("%.4f USD" | format(x)).replace(".", ",") }}{% endmacro %}
+{% macro sek(x) %}{{ "–" if x is none else ("%.1f s" | format(x)).replace(".", ",") }}{% endmacro %}
+{% macro regelname(n) %}{{ {"kunde_nachgeschlagen": "Kunde nachgeschlagen", "entwurf_abgelegt": "Antwortentwurf abgelegt",
+  "keine_blockierten_werkzeuge": "Nur erlaubte Werkzeuge", "nur_eigenes_konto": "Nur für das eigene Konto gehandelt",
+  "zahlungen_vor_empfehlung": "Zahlungen vor Empfehlung angesehen", "keine_spekulation": "Keine Spekulation",
+  "keine_zusage": "Keine Zusage vor Freigabe"}.get(n, n) }}{% endmacro %}
+<div class="kopfzeile-seite"><div><p class="ueberzeile">Betrieb</p><h1>Übersicht</h1>
+  <p class="leise" style="margin-top: 6px;">Kosten, Dauer und Fehlerquote für {{ budget.monat[5:] }}/{{ budget.monat[:4] }}, Prüfungen seit Start.</p></div></div>
+{% if hinweis == "geprueft" %}<p class="meldung ok" role="status">Prüfung durchgeführt.</p>
+{% elif hinweis == "deckel" %}<p class="meldung fehler" role="alert">Keine Prüfung: Judge-Deckel oder Monatsbudget erreicht.</p>{% endif %}
+
+<div class="kacheln">
+  <div class="karte kachel"><div class="titel">Läufe im Monat</div><div class="wert">{{ d.anzahl }}</div>
+    <div class="unter">{{ d.fertig }} fertig · {{ d.abgebrochen }} abgebrochen · {{ d.verfallen }} nicht gestartet</div></div>
+  <div class="karte kachel"><div class="titel">Kosten gesamt {{ info("budget", "Budget") }}</div><div class="wert">{{ d.kosten_gesamt | usd }}</div>
+    <div class="unter">von {{ budget.deckel_usd | usd }} · Agent {{ d.kosten_agent | usd }} · Prüfung {{ d.kosten_pruefung | usd }} · Antworten {{ d.kosten_antwort | usd }}</div></div>
+  <div class="karte kachel"><div class="titel">Kosten je Lauf {{ info("kosten", "Kosten") }}</div><div class="wert">{{ usd4(d.kosten_je_lauf) }}</div>
+    <div class="unter">Mittel der fertigen Läufe</div></div>
+  <div class="karte kachel"><div class="titel">Dauer</div><div class="wert">{{ sek(d.dauer_p50) }}</div>
+    <div class="unter">Median · 95 % unter {{ sek(d.dauer_p95) }}</div></div>
+  <div class="karte kachel"><div class="titel">Fehlerquote {{ info("fehlerquote", "Fehlerquote", true) }}</div>
+    <div class="wert">{{ "–" if d.fehlerquote is none else ((100 * d.fehlerquote) | round | int) ~ " %" }}</div>
+    <div class="unter">{{ d.fehler }} von {{ d.fertig + d.fehler }} beendeten Läufen</div></div>
+</div>
+
+<h2 class="abschnitt-titel">Läufe pro Tag <span class="sehr-leise">letzte 14 Tage</span></h2>
+<div class="karte">
+  <ol class="saeulen" aria-label="Läufe pro Tag, letzte 14 Tage">
+    {% for t in d.tage %}
+    <li class="saeule" tabindex="0" aria-label="{{ t.tag | datum }}: {{ t.anzahl }} Läufe{% if t.fehler %}, davon {{ t.fehler }} mit Fehler{% endif %}">
+      {% if t.anzahl %}<span class="balken" style="height: {{ (100 * t.anzahl / d.max_tag) | round(1) }}%"></span>{% endif %}
+      <span class="tipp" aria-hidden="true">{{ t.tag | datum }} · {{ t.anzahl }} Läufe{% if t.fehler %} · {{ t.fehler }} Fehler{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ol>
+  <div class="achse" aria-hidden="true">{% for t in d.tage %}<span>{{ t.tag[8:10] }}.{{ t.tag[5:7] }}.</span>{% endfor %}</div>
+  <details class="roh" style="margin-top: 12px;"><summary>Als Tabelle</summary>
+    <table class="tabelle"><thead><tr><th>Tag</th><th>Läufe</th><th>mit Fehler</th></tr></thead><tbody>
+    {% for t in d.tage | reverse %}<tr><td>{{ t.tag | datum }}</td><td>{{ t.anzahl }}</td><td>{{ t.fehler }}</td></tr>{% endfor %}
+    </tbody></table></details>
+</div>
+
+<h2 class="abschnitt-titel">Qualität {{ info("pruefung", "Prüfung") }}</h2>
+<div class="qualitaet">
+  <div class="karte"><h3>Regeln <span class="sehr-leise">jeder Lauf, ohne KI</span></h3>
+    {% for r in d.regeln %}
+    <div class="anteil"><span>{{ regelname(r.name) }}</span><strong>{{ r.ok }} / {{ r.gesamt }}</strong>
+      <div class="anteil-balken" aria-hidden="true"><span style="width: {{ (100 * r.ok / r.gesamt) | round(1) }}%"></span></div></div>
+    {% else %}<p class="leise">Noch keine Prüfungen.</p>{% endfor %}
+  </div>
+  <div class="karte"><h3>Zweites Modell <span class="sehr-leise">Stichprobe {{ stichprobe }} %, Sonnet 5</span></h3>
+    {% for r in d.judge %}
+    <div class="anteil"><span>{{ regelname(r.name) }} {{ info("spekulation" if r.name == "keine_spekulation" else "zusage", regelname(r.name)) }}</span>
+      <strong>{{ r.ok }} / {{ r.gesamt }}</strong>
+      <div class="anteil-balken" aria-hidden="true"><span style="width: {{ (100 * r.ok / r.gesamt) | round(1) if r.gesamt else 0 }}%"></span></div></div>
+    {% endfor %}
+    <p class="sehr-leise" style="margin-top: 8px;">{{ d.urteile }} Urteile · Kosten im Monat {{ d.kosten_pruefung | usd }} von höchstens {{ judge_deckel | usd }}</p>
+  </div>
+</div>
+
+<h2 class="abschnitt-titel">Letzte Läufe</h2>
+<div class="karte" style="padding: 16px 12px;">
+  <table class="tabelle">
+    <thead><tr><th>Zeit (UTC)</th><th>Anliegen</th><th>Status</th><th>Kosten</th><th>Dauer</th><th>Prüfung</th></tr></thead>
+    <tbody>
+    {% for l in d.letzte %}
+    <tr id="lauf-{{ l.run_id }}">
+      <td>{{ l.erstellt | datum }}</td>
+      <td><a href="/lauf/{{ l.run_id }}">{{ l.titel or "Anliegen" }}</a><div class="sehr-leise">{{ kunden[l.kunden_id].name }}</div></td>
+      <td>{% if l.status == "fertig" %}<span class="badge bestaetigt">fertig</span>{% elif l.status in ("angelegt", "laeuft") %}<span class="badge neutral">läuft</span>{% elif l.status == "verfallen" %}<span class="badge neutral">nicht gestartet</span>{% else %}<span class="badge abgelehnt">{{ l.status }}</span>{% endif %}</td>
+      <td>{{ usd4(l.kosten_usd) }}</td>
+      <td>{{ sek(l.dauer_s) }}</td>
+      <td>
+        {% for p in l.pruefungen %}
+          {% if p.regeln %}{% set n_ok = p.regeln.values() | select | list | length %}<span class="badge {{ 'bestaetigt' if n_ok == p.regeln | length else 'abgelehnt' }}">Regeln {{ n_ok }}/{{ p.regeln | length }}</span>{% endif %}
+          {% if p.judge %}<span class="badge {{ 'bestaetigt' if p.judge.keine_spekulation and p.judge.keine_zusage else 'abgelehnt' }}">Judge {{ "ok" if p.judge.keine_spekulation and p.judge.keine_zusage else "Befund" }}</span>{% endif %}
+        {% endfor %}
+        {% if l.status == "fertig" and not (l.pruefungen | selectattr("judge") | list) %}
+        <form method="post" action="/betrieb/pruefen/{{ l.run_id }}" style="display: inline;"><button class="knopf zweit klein" title="Kostet ca. 0,02 USD">Prüfen</button></form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}<tr><td colspan="6" class="leise">Noch keine Läufe.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

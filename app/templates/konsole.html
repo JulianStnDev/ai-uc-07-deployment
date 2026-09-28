@@ -34,6 +34,11 @@
       <dt>Anliegen</dt><dd>{{ e.titel or e.ticket_text[:60] }} · <a href="/lauf/{{ e.run_id }}">ganzen Fall ansehen</a></dd>
     </dl>
     <div class="begruendung"><strong>Begründung des Agents:</strong> {{ e.begruendung }}</div>
+    {% if entwuerfe.get(e.run_id) %}
+    <details class="agent-entwurf"><summary>Entwurf des Agents (intern) {{ info("agententwurf", "Entwurf des Agents") }}</summary>
+      <div class="nachricht support">{{ entwuerfe[e.run_id] }}</div></details>
+    {% endif %}
+    <p class="sehr-leise" style="margin-top: 8px;">Nach deiner Entscheidung wird die endgültige Antwort an den Kunden geschrieben.</p>
   </div>
   <form class="entscheidung" method="post" action="/freigaben/{{ e.empfehlungs_id }}" aria-label="Entscheidung zu {{ e.betrag_usd | usd }} für {{ k.name }}">
     <label for="k-{{ loop.index }}" class="sehr-leise" style="font-weight: 500;">Kommentar (optional)</label>

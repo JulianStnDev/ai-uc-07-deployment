@@ -16,6 +16,7 @@
       <a href="/" {% if aktiv == "start" %}aria-current="page"{% endif %}>Start</a>
       <a href="/anliegen" {% if aktiv == "anliegen" %}aria-current="page"{% endif %}>Anliegen stellen</a>
       <a href="/freigaben" {% if aktiv == "konsole" %}aria-current="page"{% endif %}>Support-Konsole{% if offene_freigaben %} <span class="zaehler"><span class="nur-sr">, offen: </span>{{ offene_freigaben }}</span>{% endif %}</a>
+      <a href="/betrieb" {% if aktiv == "betrieb" %}aria-current="page"{% endif %}>Betrieb</a>
     </nav>
     {% set prozent = [100, (100 * budget.belegt_usd / budget.deckel_usd) | round | int] | min %}
     <span class="budget">Budget {{ budget.belegt_usd | usd }} / {{ budget.deckel_usd | usd }}
