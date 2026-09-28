@@ -1,160 +1,223 @@
-"""Protokoll der Läufe, Erstattungsempfehlungen und Freigabe-Entscheidungen in SQLite.
+"""Protokoll der Läufe, Erstattungsempfehlungen und Freigabe-Entscheidungen.
 
-Bewusst ohne ORM: ein paar SQL-Befehle, die man lesen kann. In Branch (b) wird dieselbe
-Schnittstelle auf Neon Postgres umgestellt.
+Zwei Backends hinter derselben Schnittstelle, bewusst ohne ORM:
+- Postgres (Neon), wenn DATABASE_URL gesetzt ist: Produktion und alles, was dauerhaft sein soll.
+- SQLite-Datei sonst: lokale Entwicklung und Tests.
+Die SQL-Befehle sind für beide gleich geschrieben (Platzhalter `?`, wird für Postgres zu `%s`).
 """
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS laeufe (
-    run_id          TEXT PRIMARY KEY,
-    erstellt        TEXT NOT NULL,              -- ISO-Zeit UTC
-    kunden_id       TEXT NOT NULL,
-    absender        TEXT NOT NULL,
-    text            TEXT NOT NULL,
-    titel           TEXT,                       -- Chip-Label oder erste Wörter (kein LLM)
-    status          TEXT NOT NULL,              -- laeuft | fertig | fehler | abgebrochen
-    kosten_usd      REAL,                       -- SDK-Schätzung oder Pauschale
-    kosten_pauschal INTEGER NOT NULL DEFAULT 0, -- 1 = keine Kostenangabe, Deckel verbucht
-    dauer_s         REAL,
-    ergebnis        TEXT,                       -- JSON: Entwurf, Übergaben, Kündigungen, Turns, ...
-    ereignisse      TEXT                        -- JSON: alle Live-Ereignisse (Werkzeugaufrufe, Text)
-);
-CREATE TABLE IF NOT EXISTS empfehlungen (
-    empfehlungs_id  TEXT PRIMARY KEY,
-    run_id          TEXT NOT NULL REFERENCES laeufe(run_id),
-    erstellt        TEXT NOT NULL,
-    kunden_id       TEXT NOT NULL,
-    zahlungs_id     TEXT NOT NULL,
-    betrag_usd      REAL NOT NULL,
-    begruendung     TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS freigaben (
-    empfehlungs_id  TEXT PRIMARY KEY REFERENCES empfehlungen(empfehlungs_id),
-    entscheidung    TEXT NOT NULL CHECK (entscheidung IN ('bestaetigt', 'abgelehnt')),
-    kommentar       TEXT NOT NULL DEFAULT '',
-    entschieden     TEXT NOT NULL
-);
-"""
+# DOUBLE PRECISION statt REAL: In Postgres ist REAL nur 4 Byte genau (0,03128755 USD würde gerundet).
+SCHEMA = [
+    """CREATE TABLE IF NOT EXISTS laeufe (
+        run_id          TEXT PRIMARY KEY,
+        erstellt        TEXT NOT NULL,              -- ISO-Zeit UTC
+        kunden_id       TEXT NOT NULL,
+        absender        TEXT NOT NULL,
+        text            TEXT NOT NULL,
+        titel           TEXT,                       -- Chip-Label oder erste Wörter (kein LLM)
+        status          TEXT NOT NULL,              -- laeuft | fertig | fehler | abgebrochen
+        kosten_usd      DOUBLE PRECISION,           -- SDK-Schätzung oder Pauschale
+        kosten_pauschal INTEGER NOT NULL DEFAULT 0, -- 1 = keine Kostenangabe, Deckel verbucht
+        dauer_s         DOUBLE PRECISION,
+        ergebnis        TEXT,                       -- JSON: Entwurf, Übergaben, Kündigungen, Turns, ...
+        ereignisse      TEXT                        -- JSON: alle Live-Ereignisse (Werkzeugaufrufe, Text)
+    )""",
+    """CREATE TABLE IF NOT EXISTS empfehlungen (
+        empfehlungs_id  TEXT PRIMARY KEY,
+        run_id          TEXT NOT NULL REFERENCES laeufe(run_id),
+        erstellt        TEXT NOT NULL,
+        kunden_id       TEXT NOT NULL,
+        zahlungs_id     TEXT NOT NULL,
+        betrag_usd      DOUBLE PRECISION NOT NULL,
+        begruendung     TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS freigaben (
+        empfehlungs_id  TEXT PRIMARY KEY REFERENCES empfehlungen(empfehlungs_id),
+        entscheidung    TEXT NOT NULL CHECK (entscheidung IN ('bestaetigt', 'abgelehnt')),
+        kommentar       TEXT NOT NULL DEFAULT '',
+        entschieden     TEXT NOT NULL
+    )""",
+]
+
+# Ein Lauf dauert typisch 30–45 s. Was nach 15 min noch "läuft", hat keinen Prozess mehr.
+VERWAIST_NACH = timedelta(minutes=15)
 
 
-def jetzt_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+def jetzt_iso(jetzt: datetime | None = None) -> str:
+    return (jetzt or datetime.now(timezone.utc)).isoformat(timespec="seconds")
 
 
-class Speicher:
+class _Sqlite:
+    fehler_integritaet = (sqlite3.IntegrityError,)
+
     def __init__(self, pfad: Path):
         Path(pfad).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(pfad, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys = ON")
-        self.db.executescript(SCHEMA)
-        spalten = {r["name"] for r in self.db.execute("PRAGMA table_info(laeufe)")}
-        if "titel" not in spalten:  # Datenbank aus Branch (a)
-            self.db.execute("ALTER TABLE laeufe ADD COLUMN titel TEXT")
+
+    @contextmanager
+    def verbindung(self):
+        with self.db:  # Transaktion: commit am Ende, rollback bei Fehler
+            yield lambda sql, p=(): self.db.execute(sql, p)
+
+    def einrichten(self):
+        with self.verbindung() as x:
+            for s in SCHEMA:
+                x(s)
+            spalten = {r["name"] for r in x("PRAGMA table_info(laeufe)")}
+            if "titel" not in spalten:  # Datenbank aus Branch (a)
+                x("ALTER TABLE laeufe ADD COLUMN titel TEXT")
+
+
+class _Postgres:
+    def __init__(self, url: str):
+        import psycopg
+        from psycopg.rows import dict_row
+        from psycopg_pool import ConnectionPool
+
+        self.fehler_integritaet = (psycopg.errors.IntegrityError,)
+        # Neon legt die Datenbank nach 5 min ohne Nutzung schlafen und trennt dabei Verbindungen.
+        # check_connection prüft jede Verbindung vor der Ausgabe und ersetzt tote.
+        self.pool = ConnectionPool(url, min_size=1, max_size=4, open=True, timeout=20,
+                                   check=ConnectionPool.check_connection,
+                                   kwargs={"row_factory": dict_row, "connect_timeout": 15})
+
+    @contextmanager
+    def verbindung(self):
+        with self.pool.connection() as conn:  # Transaktion: commit am Ende, rollback bei Fehler
+            yield lambda sql, p=(): conn.execute(sql.replace("?", "%s"), p)
+
+    def einrichten(self):
+        with self.verbindung() as x:
+            for s in SCHEMA:
+                x(s)
+
+    def schliessen(self):
+        self.pool.close()
+
+
+class Speicher:
+    def __init__(self, pfad: Path | None = None, database_url: str | None = None):
+        self.backend = _Postgres(database_url) if database_url else _Sqlite(pfad)
+        self.art = "postgres" if database_url else "sqlite"
+        self.backend.einrichten()
+
+    @property
+    def db(self):
+        """Direkter Zugriff auf die SQLite-Verbindung (nur für Tests)."""
+        return self.backend.db
+
+    def _alle(self, sql: str, p=()) -> list[dict]:
+        with self.backend.verbindung() as x:
+            return [dict(r) for r in x(sql, p).fetchall()]
+
+    def _eins(self, sql: str, p=()) -> dict | None:
+        zeilen = self._alle(sql, p)
+        return zeilen[0] if zeilen else None
+
+    def schliessen(self):
+        if hasattr(self.backend, "schliessen"):
+            self.backend.schliessen()
 
     # ---------- Läufe ----------
 
-    def lauf_anlegen(self, run_id: str, kunden_id: str, absender: str, text: str, titel: str | None = None) -> None:
-        with self.db:
-            self.db.execute(
-                "INSERT INTO laeufe (run_id, erstellt, kunden_id, absender, text, titel, status) "
-                "VALUES (?, ?, ?, ?, ?, ?, 'laeuft')",
-                (run_id, jetzt_iso(), kunden_id, absender, text, titel))
+    def lauf_anlegen(self, run_id: str, kunden_id: str, absender: str, text: str, titel: str | None = None,
+                     jetzt: datetime | None = None) -> None:
+        with self.backend.verbindung() as x:
+            x("INSERT INTO laeufe (run_id, erstellt, kunden_id, absender, text, titel, status) VALUES (?, ?, ?, ?, ?, ?, 'laeuft')",
+              (run_id, jetzt_iso(jetzt), kunden_id, absender, text, titel))
 
     def lauf_abschliessen(self, run_id: str, *, status: str, kosten_usd: float, kosten_pauschal: bool,
                           dauer_s: float, ergebnis: dict, ereignisse: list, empfehlungen: list[dict]) -> None:
-        with self.db:  # eine Transaktion: Lauf und Empfehlungen zusammen oder gar nicht
-            self.db.execute(
-                "UPDATE laeufe SET status=?, kosten_usd=?, kosten_pauschal=?, dauer_s=?, ergebnis=?, ereignisse=? "
-                "WHERE run_id=?",
-                (status, kosten_usd, int(kosten_pauschal), dauer_s,
-                 json.dumps(ergebnis, ensure_ascii=False), json.dumps(ereignisse, ensure_ascii=False), run_id))
+        with self.backend.verbindung() as x:  # eine Transaktion: Lauf und Empfehlungen zusammen oder gar nicht
+            x("UPDATE laeufe SET status=?, kosten_usd=?, kosten_pauschal=?, dauer_s=?, ergebnis=?, ereignisse=? WHERE run_id=?",
+              (status, kosten_usd, int(kosten_pauschal), dauer_s,
+               json.dumps(ergebnis, ensure_ascii=False), json.dumps(ereignisse, ensure_ascii=False), run_id))
             for e in empfehlungen:
-                self.db.execute(
-                    "INSERT INTO empfehlungen (empfehlungs_id, run_id, erstellt, kunden_id, zahlungs_id, betrag_usd, begruendung) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (e["empfehlungs_id"], run_id, e["zeit"], e["kunden_id"], e["zahlungs_id"], e["betrag_usd"], e["begruendung"]))
+                x("INSERT INTO empfehlungen (empfehlungs_id, run_id, erstellt, kunden_id, zahlungs_id, betrag_usd, begruendung) "
+                  "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                  (e["empfehlungs_id"], run_id, e["zeit"], e["kunden_id"], e["zahlungs_id"], e["betrag_usd"], e["begruendung"]))
 
     def lauf(self, run_id: str) -> dict | None:
-        row = self.db.execute("SELECT * FROM laeufe WHERE run_id=?", (run_id,)).fetchone()
-        if row is None:
+        d = self._eins("SELECT * FROM laeufe WHERE run_id=?", (run_id,))
+        if d is None:
             return None
-        d = dict(row)
         d["ergebnis"] = json.loads(d["ergebnis"]) if d["ergebnis"] else None
         d["ereignisse"] = json.loads(d["ereignisse"]) if d["ereignisse"] else []
         return d
 
     def laufende_anzahl(self) -> int:
-        return self.db.execute("SELECT COUNT(*) FROM laeufe WHERE status='laeuft'").fetchone()[0]
+        return self._eins("SELECT COUNT(*) AS n FROM laeufe WHERE status='laeuft'")["n"]
 
-    def verwaiste_laeufe_abbrechen(self, pauschale_usd: float) -> int:
-        """Beim Start der App: Läufe, die beim letzten Beenden noch liefen, haben keine Kostenangabe.
-        Sie werden mit der Pauschale verbucht (lieber zu hoch als zu niedrig)."""
-        with self.db:
-            cur = self.db.execute(
-                "UPDATE laeufe SET status='abgebrochen', kosten_usd=?, kosten_pauschal=1 WHERE status='laeuft'",
-                (pauschale_usd,))
-        return cur.rowcount
+    def verwaiste_laeufe_abbrechen(self, pauschale_usd: float, jetzt: datetime | None = None) -> int:
+        """Läufe, die länger als VERWAIST_NACH "laufen", hatten keinen Abschluss (Neustart, Absturz).
+        Sie werden mit der Pauschale verbucht, lieber zu hoch als zu niedrig. Jüngere Läufe bleiben
+        unberührt, denn sie können gerade auf einer anderen Instanz laufen."""
+        grenze = jetzt_iso((jetzt or datetime.now(timezone.utc)) - VERWAIST_NACH)
+        with self.backend.verbindung() as x:
+            cur = x("UPDATE laeufe SET status='abgebrochen', kosten_usd=?, kosten_pauschal=1 WHERE status='laeuft' AND erstellt < ?",
+                    (pauschale_usd, grenze))
+            return cur.rowcount
 
     # ---------- Budget ----------
 
     def kosten_im_monat(self, monat: str) -> float:
         """monat im Format 'YYYY-MM' (UTC). Summe aller abgeschlossenen Läufe."""
-        return self.db.execute(
-            "SELECT COALESCE(SUM(kosten_usd), 0) FROM laeufe WHERE substr(erstellt, 1, 7)=? AND status != 'laeuft'",
-            (monat,)).fetchone()[0]
+        return float(self._eins(
+            "SELECT COALESCE(SUM(kosten_usd), 0) AS s FROM laeufe WHERE substr(erstellt, 1, 7)=? AND status != 'laeuft'",
+            (monat,))["s"])
 
     def laufende_im_monat(self, monat: str) -> int:
-        return self.db.execute(
-            "SELECT COUNT(*) FROM laeufe WHERE substr(erstellt, 1, 7)=? AND status='laeuft'", (monat,)).fetchone()[0]
+        return self._eins("SELECT COUNT(*) AS n FROM laeufe WHERE substr(erstellt, 1, 7)=? AND status='laeuft'", (monat,))["n"]
 
     # ---------- Empfehlungen und Freigaben ----------
 
     def offene_empfehlungen(self) -> list[dict]:
-        return [dict(r) for r in self.db.execute(
+        return self._alle(
             "SELECT e.*, l.text AS ticket_text, l.titel FROM empfehlungen e JOIN laeufe l USING (run_id) "
-            "LEFT JOIN freigaben f USING (empfehlungs_id) WHERE f.empfehlungs_id IS NULL ORDER BY e.erstellt")]
+            "LEFT JOIN freigaben f USING (empfehlungs_id) WHERE f.empfehlungs_id IS NULL ORDER BY e.erstellt")
 
     def entschiedene_empfehlungen(self, limit: int = 20) -> list[dict]:
-        return [dict(r) for r in self.db.execute(
+        return self._alle(
             "SELECT e.*, f.entscheidung, f.kommentar, f.entschieden, l.titel FROM empfehlungen e JOIN laeufe l USING (run_id) "
-            "JOIN freigaben f USING (empfehlungs_id) ORDER BY f.entschieden DESC LIMIT ?", (limit,))]
+            "JOIN freigaben f USING (empfehlungs_id) ORDER BY f.entschieden DESC LIMIT ?", (limit,))
 
     def empfehlungen_zum_lauf(self, run_id: str) -> list[dict]:
-        return [dict(r) for r in self.db.execute(
+        return self._alle(
             "SELECT e.*, f.entscheidung, f.kommentar FROM empfehlungen e "
-            "LEFT JOIN freigaben f USING (empfehlungs_id) WHERE e.run_id=? ORDER BY e.erstellt", (run_id,))]
+            "LEFT JOIN freigaben f USING (empfehlungs_id) WHERE e.run_id=? ORDER BY e.erstellt", (run_id,))
 
     def entscheiden(self, empfehlungs_id: str, entscheidung: str, kommentar: str) -> bool:
         """Speichert genau eine Entscheidung je Empfehlung. False, wenn unbekannt oder schon entschieden."""
         if entscheidung not in ("bestaetigt", "abgelehnt"):
             raise ValueError(f"Unbekannte Entscheidung: {entscheidung!r}")
         try:
-            with self.db:
-                self.db.execute(
-                    "INSERT INTO freigaben (empfehlungs_id, entscheidung, kommentar, entschieden) VALUES (?, ?, ?, ?)",
-                    (empfehlungs_id, entscheidung, kommentar.strip(), jetzt_iso()))
-        except sqlite3.IntegrityError:  # schon entschieden oder Empfehlung gibt es nicht
+            with self.backend.verbindung() as x:
+                x("INSERT INTO freigaben (empfehlungs_id, entscheidung, kommentar, entschieden) VALUES (?, ?, ?, ?)",
+                  (empfehlungs_id, entscheidung, kommentar.strip(), jetzt_iso()))
+        except self.backend.fehler_integritaet:  # schon entschieden oder Empfehlung gibt es nicht
             return False
         return True
 
     def uebergaben(self, limit: int = 20) -> list[dict]:
         """Fälle, die der Agent an einen Menschen übergeben hat (aus dem Ergebnis der Läufe)."""
         faelle = []
-        for r in self.db.execute(
-                "SELECT run_id, erstellt, kunden_id, titel, text, ergebnis FROM laeufe "
-                "WHERE ergebnis LIKE '%uebergabe_id%' ORDER BY erstellt DESC LIMIT ?", (limit,)):
+        # Muster als Parameter: Ein %-Zeichen direkt im SQL müsste man für Postgres verdoppeln.
+        for r in self._alle("SELECT run_id, erstellt, kunden_id, titel, ergebnis FROM laeufe "
+                            "WHERE ergebnis LIKE ? ORDER BY erstellt DESC LIMIT ?", ("%uebergabe_id%", limit)):
             for u in json.loads(r["ergebnis"]).get("uebergaben", []):
                 faelle.append({"run_id": r["run_id"], "erstellt": r["erstellt"], "kunden_id": r["kunden_id"],
                                "titel": r["titel"], "grund": u["grund"], "prioritaet": u["prioritaet"]})
         return faelle
 
     def freigabe_statistik(self) -> dict:
-        r = self.db.execute(
-            "SELECT COUNT(*) AS gesamt, COALESCE(SUM(entscheidung='bestaetigt'), 0) AS bestaetigt FROM freigaben").fetchone()
-        return {"gesamt": r["gesamt"], "bestaetigt": r["bestaetigt"]}
+        r = self._eins("SELECT COUNT(*) AS gesamt, "
+                       "COALESCE(SUM(CASE WHEN entscheidung='bestaetigt' THEN 1 ELSE 0 END), 0) AS bestaetigt FROM freigaben")
+        return {"gesamt": int(r["gesamt"]), "bestaetigt": int(r["bestaetigt"])}

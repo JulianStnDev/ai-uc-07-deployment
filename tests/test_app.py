@@ -266,10 +266,16 @@ def test_nur_ein_lauf_gleichzeitig(client):
 
 
 def test_verwaiste_laeufe_beim_start_pauschal_verbucht(tmp_path):
-    Speicher(tmp_path / "uc7.sqlite").lauf_anlegen("20260928-000000-bbbbbb", "K001", "a@example.com", "x")
+    from datetime import timedelta
+    s = Speicher(tmp_path / "uc7.sqlite")
+    alt = datetime.now(timezone.utc) - timedelta(minutes=20)
+    s.lauf_anlegen("20260928-000000-bbbbbb", "K001", "a@example.com", "alt", jetzt=alt)
+    s.lauf_anlegen("20260928-000000-cccccc", "K001", "a@example.com", "läuft gerade woanders")
     with TestClient(create_app(cfg(tmp_path))) as c:
         lauf = c.app.state.speicher.lauf("20260928-000000-bbbbbb")
         assert lauf["status"] == "abgebrochen" and lauf["kosten_usd"] == 0.50
+        # Jüngere Läufe können auf einer anderen Cloud-Run-Instanz laufen und bleiben unberührt
+        assert c.app.state.speicher.lauf("20260928-000000-cccccc")["status"] == "laeuft"
 
 
 # ---------- Freigaben ----------
@@ -353,3 +359,11 @@ def test_sse_format_mehrzeilig():
 def test_usd_deutsch():
     assert darstellung.usd(1234.5) == "1.234,50 USD"
     assert darstellung.usd_genau(0.0312) == "0,0312 USD"
+
+
+def test_diagnose_startet_cli_ohne_api_und_nur_mit_zugang(client, tmp_path):
+    r = client.get("/diagnose")
+    assert r.status_code == 200 and r.json()["cli_ok"] and "Claude Code" in r.json()["cli_ausgabe"]
+    assert r.json()["speicher"] == "sqlite"
+    with TestClient(create_app(cfg(tmp_path / "x"))) as fremd:
+        assert fremd.get("/diagnose", follow_redirects=False).status_code == 303

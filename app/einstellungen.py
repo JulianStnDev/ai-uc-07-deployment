@@ -1,7 +1,7 @@
 """Alle Einstellungen der App kommen aus Umgebungsvariablen (lokal aus .env).
 
 Pflicht:  ZUGANGSCODE, ANTHROPIC_API_KEY (ohne Key startet kein Lauf, die App selbst läuft aber)
-Optional: SESSION_SECRET, DATEN_DIR, MONATSDECKEL_USD, MAX_PARALLELE_LAEUFE, COOKIE_SECURE
+Optional: DATABASE_URL (Neon; ohne: SQLite in DATEN_DIR), SESSION_SECRET, DATEN_DIR, MONATSDECKEL_USD, MAX_PARALLELE_LAEUFE, COOKIE_SECURE
 """
 
 import os
@@ -18,6 +18,7 @@ class Einstellungen:
     monatsdeckel_usd: float
     max_parallele_laeufe: int
     cookie_secure: bool
+    database_url: str | None = None
 
     @property
     def db_pfad(self) -> Path:
@@ -40,4 +41,5 @@ def aus_umgebung() -> Einstellungen:
         monatsdeckel_usd=float(os.environ.get("MONATSDECKEL_USD", "4.50")),
         max_parallele_laeufe=int(os.environ.get("MAX_PARALLELE_LAEUFE", "1")),
         cookie_secure=os.environ.get("COOKIE_SECURE", "0") == "1",
+        database_url=os.environ.get("DATABASE_URL") or None,
     )

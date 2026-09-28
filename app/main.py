@@ -15,6 +15,7 @@ import json
 import logging
 import re
 import secrets
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -56,18 +57,20 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
     load_dotenv()  # lokal: .env im Projektordner; im Container kommen die Werte direkt als Umgebungsvariablen
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     cfg = einstellungen or aus_umgebung()
-    speicher = Speicher(cfg.db_pfad)
+    speicher = Speicher(cfg.db_pfad, cfg.database_url)
     laufende_tasks: set[asyncio.Task] = set()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         n = speicher.verwaiste_laeufe_abbrechen(budget.RESERVE_JE_LAUF_USD)
         if n:
-            log.warning("%d Lauf/Läufe vom letzten Start ohne Abschluss, pauschal verbucht", n)
+            log.warning("%d verwaiste(r) Lauf/Läufe ohne Abschluss, pauschal verbucht", n)
+        log.info("Speicher: %s", speicher.art)
         yield
         for t in list(laufende_tasks):
             t.cancel()
         await asyncio.gather(*laufende_tasks, return_exceptions=True)
+        speicher.schliessen()
 
     app = FastAPI(title="UC7 FocusFlow-Support-Agent", lifespan=lifespan, docs_url=None, redoc_url=None)
     app.state.speicher = speicher
@@ -103,6 +106,23 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
     @app.get("/health")
     async def health():
         return JSONResponse({"ok": True})
+
+    @app.get("/diagnose")
+    async def diagnose():
+        """Smoke-Test ohne API-Kosten: Startet die gebündelte Claude-CLI mit --version (nur mit Zugangscode)."""
+        import claude_agent_sdk
+        cli = Path(claude_agent_sdk.__file__).parent / "_bundled" / "claude"
+        start = time.perf_counter()
+        try:
+            proc = await asyncio.create_subprocess_exec(str(cli), "--version", stdout=asyncio.subprocess.PIPE,
+                                                        stderr=asyncio.subprocess.STDOUT)
+            ausgabe, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+            ok, text = proc.returncode == 0, ausgabe.decode(errors="replace").strip()[:500]
+        except Exception as e:  # noqa: BLE001
+            ok, text = False, f"{type(e).__name__}: {e}"[:500]
+        return JSONResponse({"cli_ok": ok, "cli_ausgabe": text, "dauer_s": round(time.perf_counter() - start, 2),
+                             "speicher": speicher.art, "sdk_version": claude_agent_sdk.__version__},
+                            status_code=200 if ok else 500)
 
     @app.get("/login", response_class=HTMLResponse)
     async def login_seite(request: Request):
