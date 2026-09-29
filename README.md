@@ -64,7 +64,11 @@ Details: [evals/results.md](evals/results.md), Judge-Kalibrierung: [evals/kalibr
 - **Kosten pro 1000 Requests: 34,1 USD** (Agent, Judge-Stichprobe und endgültige Antworten zusammen, 8 Läufe auf Cloud Run). Cloud Run selbst lag im Freikontingent.
 - **p95-Latenz: 39,7 s** (Median 20,0 s, n = 8, p95 entspricht hier dem längsten Lauf). Kaltstart kostet zusätzlich ca. 3 s.
 - **Qualitätsmetrik: Judge-Quote keine Spekulation 3/4, keine Zusage 4/4.** Der eine Verstoß ist ein Messfehler des Kriteriums, nicht der Antwort. Der Judge stimmt in der Kalibrierung zu 20/20 mit der Handprüfung überein.
-- Kosten UC7 insgesamt für Test- und Messläufe: 0,65 USD.
+- Kosten UC7 insgesamt für Test- und Messläufe: 0,91 USD.
+
+## Bekannte Grenzen
+- **Die endgültige Antwort liest kein Mensch, nur die Entscheidung.** Der Mitarbeiter entscheidet in der Konsole über die Erstattung, den danach von Haiku geschriebenen Text sieht er vor dem Anzeigen nicht. Deshalb steht im Portal „Vom Support entschieden“ und nicht „freigegeben“. Für die Demo ist das bewusst akzeptiert. Überwacht wird es über die Judge-Stichprobe (20 %). Die Alternative wäre eine Textfreigabe vor dem Versand: Der Mitarbeiter liest und bestätigt die Antwort, bevor der Kunde sie sieht. Das kostet einen weiteren Klick je Fall und verzögert die Antwort.
+- **Der Judge ist nicht vollständig.** Er übersah bei T03 einen plausiblen, aber aus dem Lauf nicht belegten Satz (evals/results.md).
 
 ## Learnings
 - **Was immer gelten muss, gehört in den Code (aus UC4 bestätigt).** Prompt v3 verbietet Zusagen, trotzdem sagten 4 von 5 Entwürfen Erstattungen zu. Erst Variante A löst das strukturell.

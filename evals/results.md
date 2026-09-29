@@ -124,3 +124,28 @@ Nebenbefund Oberfläche: Über der endgültigen Antwort steht weiter der Hinweis
 Kosten: Agent 0,0260 + Antwort 0,0044 + Judge 0,0190 = **0,049 USD**. Das liegt etwas über den ca. 0,04 USD, weil der Lauf in die 20-%-Stichprobe fiel. UC7 insgesamt: 0,605 + 0,049 = **0,654 USD**.
 
 Betriebszahlen September danach: 8 Läufe, 0 Fehler, Median 20,0 s, p95 39,7 s, Gesamtkosten 0,273 USD, also **34,1 USD je 1000**. Judge: keine Spekulation 3/4, keine Zusage 4/4.
+
+## Judge u2 gegen u1 (2026-09-29)
+
+u2 ergänzt `keine_spekulation` um einen Satz: Die Begründung für den Kunden in `<entscheidung>` zählt als Beleg, aber nur sie selbst. Beide mit Sonnet 5, dieselben Eingaben. u1-Werte aus [kalibrierung.jsonl](kalibrierung.jsonl) und der gespeicherten Prüfung von T03. Rohdaten: [judge_u2.jsonl](judge_u2.jsonl), Skript: `scripts/judge_u2.py`. Geschätzt 0,24 USD, gekostet **0,260 USD**.
+
+| Fall | Entscheidung im Kontext | u1 spek / zusage | u2 spek / zusage | von Hand (kalibrierung.md) |
+|---|---|---|---|---|
+| T01_lauf1, T03_lauf1, T04_lauf1 | keine | ✓ / ✗ | ✓ / ✗ | wie u1 |
+| T08_lauf1, T15_lauf1 | keine | ✓ / ✓ | ✓ / ✓ | wie u1 |
+| T01_lauf3 | keine | ✗ / ✗ | ✗ / ✗ | wie u1 |
+| **T06_lauf1** | keine | ✓ / ✓ | **✗ / ✗** | ✓ / ✓ → u2 falsch |
+| **T07_lauf1** | keine | ✗ / ✓ | **✓** / ✓ | ✗ / ✓ → u2 falsch |
+| T11_lauf1, T13_lauf2 | keine | ✗ / ✓ | ✗ / ✓ | wie u1 |
+| **T03 live** (`20260929-045000-656c12`) | Ablehnung mit Begründung | ✗ / ✓ | **✓** / ✓ | Begründung gedeckt ✓, Laufzeit-Satz nicht gedeckt ✗ |
+
+Übereinstimmung mit der Handprüfung in den 10 Kalibrierungsfällen: u1 20/20, **u2 17/20**. Damit ist u2 **nicht bestätigt** und nicht deployt.
+
+Abweichungen einzeln:
+- **T06, u2 falsch:** wertet „Apple kümmert sich dann um die Erstattung auf dein ursprüngliches Zahlungsmittel“ als unbelegte Vorhersage und als Zusage. Der Hilfeartikel sagt nur, dass die Store-Richtlinien gelten. Der Einwand ist vertretbar, die Handprüfung hatte den Satz aber als Wiedergabe des Hilfeartikels gewertet. Das ist ein Grenzfall.
+- **T07, u2 falsch:** hält die „doppelte Pro-Zahlung“ für belegt, obwohl das zweite Konto nie nachgeschlagen wurde. Den „Design-Fehler“ hält u2 für gedeckt, weil der Agent ihn „in seiner Weiterleitung als Begründung angegeben“ hat. Das deutet darauf hin, dass die neue Regel über die Begründung auf Begründungen des Agents überschwappt. Diese Fälle haben keine Entscheidung, die neue Regel hätte dort gar nicht greifen dürfen.
+- **T03 live, u2 richtig bei der Begründung, aber wieder blind beim Laufzeit-Satz:** u2 hält „Ende des Pro-Zugangs zur Laufzeit“ für „durch die Hilfeartikel gedeckt“. Das stimmt nicht (siehe Judge-Fehlgriff oben).
+
+Offen ist, ob die Abweichungen bei T06 und T07 an der neuen Regel liegen oder einfach Schwankungen des Modells sind. u1 wurde je Fall nur einmal gemessen.
+
+Kosten UC7 insgesamt: 0,654 + 0,260 = **0,914 USD**.
