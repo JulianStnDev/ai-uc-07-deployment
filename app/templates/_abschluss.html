@@ -40,3 +40,30 @@
   </ul>
 </div>
 {% endif %}
+
+{% if empfehlungen and ergebnis.entwurf %}
+<details class="agent-entwurf">
+  <summary>Entwurf des Agents (intern) {{ info("agententwurf", "Entwurf des Agents") }}</summary>
+  <div class="nachricht support">{{ ergebnis.entwurf }}</div>
+</details>
+{% endif %}
+{% for p in pruefungen %}
+<div class="ergebnis-liste pruefung">
+  <h3>Prüfung {{ "des Antwortentwurfs" if p.art == "agent" else "der Antwort nach Freigabe" }} {{ info("pruefung", "Prüfung") }}</h3>
+  <ul>
+    {% if p.regeln %}{% set n_ok = p.regeln.values() | select | list | length %}
+    <li>Regeln: {{ n_ok }} von {{ p.regeln | length }} eingehalten
+      {% if n_ok == p.regeln | length %}<span class="badge bestaetigt">ok</span>{% else %}<span class="badge abgelehnt">verletzt: {{ p.regeln | dictsort | selectattr(1, "false") | map(attribute=0) | join(", ") }}</span>{% endif %}</li>
+    {% endif %}
+    {% if p.judge %}
+    <li>Keine Spekulation {{ info("spekulation", "Keine Spekulation") }}
+      {% if p.judge.keine_spekulation %}<span class="badge bestaetigt">ok</span>{% else %}<span class="badge abgelehnt">verletzt</span>{% endif %}
+      <div class="sehr-leise">{{ p.judge.keine_spekulation_begruendung }}</div></li>
+    <li>Keine Zusage vor Freigabe {{ info("zusage", "Keine Zusage") }}
+      {% if p.judge.keine_zusage %}<span class="badge bestaetigt">ok</span>{% else %}<span class="badge abgelehnt">verletzt</span>{% endif %}
+      <div class="sehr-leise">{{ p.judge.keine_zusage_begruendung }}</div></li>
+    {% elif p.fehler %}<li class="sehr-leise">Keine Prüfung durch das zweite Modell: {{ p.fehler }}</li>
+    {% else %}<li class="sehr-leise">Nicht in der Stichprobe für das zweite Modell.</li>{% endif %}
+  </ul>
+</div>
+{% endfor %}

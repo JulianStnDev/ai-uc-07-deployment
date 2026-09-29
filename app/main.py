@@ -6,6 +6,7 @@ Seiten:
     /anliegen           Kundenportal: Kunde wählen + Anliegen schreiben (oder Pause, wenn Budget aufgebraucht)
     /lauf/{id}          Links Kundenportal mit Antwortentwurf, rechts "Hinter den Kulissen" live per SSE
     /freigaben          Support-Konsole: Erstattungsempfehlungen bestätigen oder ablehnen, Übergaben
+    /betrieb            Übersicht: Läufe, Kosten, Dauer, Fehlerquote, Prüfungen
 
 Start lokal:  uvicorn --factory app.main:create_app --reload   (Einstellungen: app/einstellungen.py, .env.example)
 """
@@ -28,7 +29,7 @@ from fastapi.templating import Jinja2Templates
 
 from uc4_agent.werkzeuge import DATA_DIR, ROOT as UC4_ROOT
 
-from . import budget, darstellung, hinweise, zugang
+from . import antwort, budget, darstellung, hinweise, pruefung, zugang
 from .einstellungen import Einstellungen, aus_umgebung
 from .lauf import BEOBACHTER, Beobachter, QueryFn, _sdk_query, lauf_ausfuehren
 from .speicher import Speicher
@@ -54,7 +55,10 @@ def neue_run_id() -> str:
     return f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{secrets.token_hex(3)}"
 
 
-def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _sdk_query) -> FastAPI:
+def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _sdk_query,
+               judge_fn=None, antwort_fn=None) -> FastAPI:
+    """judge_fn(ticket, text, ereignisse, entscheidung) -> Urteil und antwort_fn(lauf, empfehlungen) -> {text, kosten_usd,
+    modell} sind austauschbar, damit Tests ohne LLM laufen. Standard: echte API-Aufrufe."""
     load_dotenv()  # lokal: .env im Projektordner; im Container kommen die Werte direkt als Umgebungsvariablen
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     cfg = einstellungen or aus_umgebung()
@@ -81,6 +85,95 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
     app.state.einstellungen = cfg
     app.state.laufende_tasks = laufende_tasks
     app.state.agent_platz = agent_platz
+
+    # ---------- LLM-Aufrufe außerhalb des Agents (Judge, endgültige Antwort) ----------
+    _client = {}
+
+    def llm():
+        if "c" not in _client:
+            import anthropic
+            _client["c"] = anthropic.Anthropic()  # liest ANTHROPIC_API_KEY
+        return _client["c"]
+
+    judge_fn = judge_fn or (lambda ticket, text, ereignisse, entscheidung:
+                            pruefung.judge(llm(), ticket, text, ereignisse, entscheidung))
+    antwort_fn = antwort_fn or (lambda lauf, empfehlungen: antwort.antwort_schreiben(llm(), lauf, empfehlungen))
+
+    def hintergrund(coro) -> None:
+        task = asyncio.create_task(coro)
+        laufende_tasks.add(task)
+        task.add_done_callback(laufende_tasks.discard)
+
+    def judge_erlaubt() -> str | None:
+        """None, wenn geprüft werden darf, sonst der Grund."""
+        stand = budget.stand(speicher, cfg.monatsdeckel_usd)
+        if stand.gesperrt:
+            return "Monatsbudget erreicht"
+        if speicher.pruefungskosten_im_monat(stand.monat) >= pruefung.JUDGE_DECKEL_MONAT_USD:
+            return "Judge-Deckel erreicht"
+        return None
+
+    async def pruefen(run_id: str, art: str = "agent", erzwingen: bool = False) -> None:
+        """Regeln immer; Judge für die Stichprobe (oder erzwungen) auf den Text, den der Kunde bekommt."""
+        lauf = speicher.lauf(run_id)
+        if lauf is None or lauf["status"] in ("angelegt", "laeuft", "verfallen"):
+            return
+        empfehlungen = speicher.empfehlungen_zum_lauf(run_id)
+        entscheidung = None
+        if art == "agent":
+            regeln = pruefung.regeln_pruefen(lauf["ereignisse"], lauf["kunden_id"])
+            entwurf = (lauf["ergebnis"] or {}).get("entwurf")
+            # Bei Empfehlungen sieht der Kunde nicht den Agent-Entwurf, sondern später die endgültige Antwort.
+            text = entwurf if (erzwingen or not empfehlungen) else None
+        else:
+            regeln = None
+            a = speicher.antwort(run_id)
+            text = a["text"] if a else None
+            entscheidung = antwort.entscheidungen_als_text(empfehlungen)
+        urteil, modell, kosten, fehler = None, None, 0.0, None
+        if text and (erzwingen or pruefung.in_stichprobe(run_id)):
+            fehler = judge_erlaubt()
+            if fehler is None:
+                try:
+                    urteil = await asyncio.to_thread(judge_fn, lauf["text"], text, lauf["ereignisse"], entscheidung)
+                    modell, kosten = urteil.get("modell"), float(urteil.get("kosten_usd", 0))
+                except pruefung.JudgeFehler as e:
+                    fehler, kosten = str(e), e.kosten_usd
+                except Exception as e:  # noqa: BLE001
+                    log.exception("Judge für %s fehlgeschlagen", run_id)
+                    fehler = f"Judge-Fehler ({type(e).__name__})"
+        speicher.pruefung_speichern(run_id, art, regeln, urteil, modell, kosten, fehler)
+
+    async def antwort_erstellen(run_id: str) -> None:
+        """Variante A: endgültige Antwort, sobald über alle Empfehlungen eines Laufs entschieden ist."""
+        empfehlungen = speicher.empfehlungen_zum_lauf(run_id)
+        if not empfehlungen or any(e["entscheidung"] is None for e in empfehlungen) or speicher.antwort(run_id):
+            return
+        lauf = speicher.lauf(run_id)
+        name = KUNDEN[lauf["kunden_id"]]["name"]
+        quelle, text, modell, kosten = "vorlage", antwort.vorlage(name, empfehlungen), None, 0.0
+        if not budget.stand(speicher, cfg.monatsdeckel_usd).gesperrt:
+            try:
+                r = await asyncio.to_thread(antwort_fn, lauf, empfehlungen)
+                quelle, text, modell, kosten = "llm", r["text"], r["modell"], float(r["kosten_usd"])
+            except Exception:  # noqa: BLE001 – Rückfall auf die Vorlage, der Kunde bekommt trotzdem eine Antwort
+                log.exception("Endgültige Antwort für %s fehlgeschlagen, Vorlage verwendet", run_id)
+        speicher.antwort_speichern(run_id, text, quelle, empfehlungen, modell, kosten)
+        if quelle == "llm":
+            await pruefen(run_id, "antwort")
+
+    def kundensicht(lauf: dict) -> dict:
+        """Was der Kunde im Portal sieht (Variante A)."""
+        empfehlungen = speicher.empfehlungen_zum_lauf(lauf["run_id"])
+        ergebnis = lauf["ergebnis"] or {}
+        if not empfehlungen:
+            return {"art": "entwurf", "text": ergebnis.get("entwurf")}
+        a = speicher.antwort(lauf["run_id"])
+        if a:
+            return {"art": "antwort", "text": a["text"], "quelle": a["quelle"]}
+        if any(e["entscheidung"] is None for e in empfehlungen):
+            return {"art": "zwischenbescheid", "text": antwort.zwischenbescheid(KUNDEN[lauf["kunden_id"]]["name"])}
+        return {"art": "wird_geschrieben", "text": None}
     app.mount("/static", StaticFiles(directory=HIER / "static"), name="static")
     templates = Jinja2Templates(directory=HIER / "templates")
     templates.env.filters.update(usd=darstellung.usd, usd_genau=darstellung.usd_genau, datum=darstellung.datum,
@@ -199,9 +292,19 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
         return fragment("_schritt.html", s=darstellung.schritt(e, erste_notiz))
 
     def abschluss_html(run_id: str, ergebnis: dict) -> dict[str, str]:
-        """Am Ende gibt es drei Teile: Status-Badge (rechts oben), Antwortentwurf (links), Abschluss (rechts)."""
-        ctx = {"run_id": run_id, "ergebnis": ergebnis, "empfehlungen": speicher.empfehlungen_zum_lauf(run_id)}
+        """Am Ende gibt es drei Teile: Status-Badge (rechts oben), Kundensicht (links), Abschluss (rechts)."""
+        lauf = speicher.lauf(run_id)
+        ctx = {"run_id": run_id, "ergebnis": ergebnis, "empfehlungen": speicher.empfehlungen_zum_lauf(run_id),
+               "sicht": kundensicht(lauf), "pruefungen": speicher.pruefungen_zum_lauf(run_id)}
         return {name: fragment(f"_{name}.html", **ctx) for name in ("status", "entwurf", "abschluss")}
+
+    @app.get("/lauf/{run_id}/antwort", response_class=HTMLResponse)
+    async def lauf_antwort(run_id: str):
+        """Wird von der Laufseite abgefragt, solange der Kunde auf die Entscheidung wartet."""
+        lauf = speicher.lauf(run_id) if RUN_ID_MUSTER.match(run_id) else None
+        if lauf is None or not lauf["ergebnis"]:
+            return HTMLResponse("", status_code=404)
+        return HTMLResponse(abschluss_html(run_id, lauf["ergebnis"])["entwurf"])
 
     @app.get("/lauf/{run_id}", response_class=HTMLResponse)
     async def lauf_seite(request: Request, run_id: str):
@@ -250,6 +353,7 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
             laufende_tasks.add(task)
             task.add_done_callback(laufende_tasks.discard)
             task.add_done_callback(lambda _t: agent_platz.release())  # Platz erst nach dem Lauf freigeben, nicht beim Tab-Schließen
+            task.add_done_callback(lambda _t: None if _t.cancelled() else hintergrund(pruefen(run_id)))  # Regeln + ggf. Judge
             return b
 
         async def ereignisse():
@@ -306,15 +410,92 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
 
     @app.get("/freigaben", response_class=HTMLResponse)
     async def freigaben(request: Request, hinweis: str | None = None):
-        return seite(request, "konsole.html", aktiv="konsole", offen=speicher.offene_empfehlungen(),
+        offen = speicher.offene_empfehlungen()
+        entwuerfe = {e["run_id"]: ((speicher.lauf(e["run_id"]) or {}).get("ergebnis") or {}).get("entwurf") for e in offen}
+        return seite(request, "konsole.html", aktiv="konsole", offen=offen, entwuerfe=entwuerfe,
                      entschieden=speicher.entschiedene_empfehlungen(), statistik=speicher.freigabe_statistik(),
                      uebergaben=speicher.uebergaben(), hinweis=hinweis)
 
     @app.post("/freigaben/{empfehlungs_id}")
-    async def entscheiden(empfehlungs_id: str, entscheidung: str = Form(""), kommentar: str = Form("")):
+    async def entscheiden(empfehlungs_id: str, entscheidung: str = Form(""), begruendung: str = Form(""),
+                          notiz: str = Form("")):
+        """begruendung geht an den Kunden (über die endgültige Antwort), notiz bleibt intern."""
         if entscheidung not in ("bestaetigt", "abgelehnt"):
             return RedirectResponse("/freigaben?hinweis=ungueltig", status_code=303)
-        ok = speicher.entscheiden(empfehlungs_id, entscheidung, kommentar[:1000])
+        ok = speicher.entscheiden(empfehlungs_id, entscheidung, begruendung[:1000], notiz[:1000])
+        if ok:
+            hintergrund(antwort_erstellen(speicher.run_id_zur_empfehlung(empfehlungs_id)))  # Variante A
         return RedirectResponse(f"/freigaben?hinweis={'gespeichert' if ok else 'schon_entschieden'}", status_code=303)
 
+    # ---------- Betrieb ----------
+
+    @app.get("/betrieb", response_class=HTMLResponse)
+    async def betrieb(request: Request, hinweis: str | None = None):
+        stand = budget.stand(speicher, cfg.monatsdeckel_usd)
+        daten = betriebsdaten(speicher.laeufe_uebersicht(), speicher.pruefungen(), stand,
+                              speicher.pruefungskosten_im_monat(stand.monat), speicher.antworten_kosten(stand.monat))
+        return seite(request, "betrieb.html", aktiv="betrieb", budget=stand, d=daten, hinweis=hinweis,
+                     judge_deckel=pruefung.JUDGE_DECKEL_MONAT_USD, stichprobe=pruefung.STICHPROBE_PROZENT)
+
+    @app.post("/betrieb/pruefen/{run_id}")
+    async def betrieb_pruefen(run_id: str):
+        """Judge für einen Lauf von Hand auslösen (zählt in den Judge-Deckel)."""
+        if not RUN_ID_MUSTER.match(run_id) or speicher.lauf(run_id) is None:
+            return RedirectResponse("/betrieb?hinweis=unbekannt", status_code=303)
+        grund = judge_erlaubt()
+        if grund:
+            return RedirectResponse("/betrieb?hinweis=deckel", status_code=303)
+        await pruefen(run_id, "antwort" if speicher.antwort(run_id) else "agent", erzwingen=True)
+        return RedirectResponse(f"/betrieb?hinweis=geprueft#lauf-{run_id}", status_code=303)
+
     return app
+
+
+def _p(werte: list[float], q: float) -> float | None:
+    """Perzentil (nächster Rang), None bei leerer Liste."""
+    if not werte:
+        return None
+    import math
+    s = sorted(werte)
+    return s[max(0, math.ceil(q * len(s)) - 1)]
+
+
+def betriebsdaten(laeufe: list[dict], pruefungen: list[dict], stand, pruef_kosten: float, antwort_kosten: float,
+                  heute: datetime | None = None, tage: int = 14) -> dict:
+    """Kennzahlen für /betrieb. Kosten, Dauer und Fehlerquote: aktueller Monat. Qualität: alle Prüfungen."""
+    from datetime import timedelta
+    heute = heute or datetime.now(timezone.utc)
+    im_monat = [l for l in laeufe if l["erstellt"].startswith(stand.monat)]
+    fertig = [l for l in im_monat if l["status"] == "fertig"]
+    beendet = [l for l in im_monat if l["status"] in ("fertig", "fehler", "abgebrochen")]
+    fehler = [l for l in beendet if l["status"] != "fertig"]
+    agent_kosten = sum(l["kosten_usd"] or 0 for l in im_monat if l["status"] not in ("angelegt", "laeuft"))
+    dauern = [l["dauer_s"] for l in fertig if l["dauer_s"]]
+    tageswerte = []
+    for i in range(tage - 1, -1, -1):
+        tag = (heute - timedelta(days=i)).strftime("%Y-%m-%d")
+        n = [l for l in laeufe if l["erstellt"].startswith(tag) and l["status"] != "verfallen"]
+        tageswerte.append({"tag": tag, "anzahl": len(n), "fehler": sum(l["status"] in ("fehler", "abgebrochen") for l in n)})
+    max_tag = max([t["anzahl"] for t in tageswerte] + [1])
+    regel_pruef = [p for p in pruefungen if p["art"] == "agent" and p["regeln"]]
+    regel_namen = list(regel_pruef[0]["regeln"]) if regel_pruef else []
+    regeln = [{"name": n, "ok": sum(p["regeln"][n] for p in regel_pruef), "gesamt": len(regel_pruef)} for n in regel_namen]
+    urteile = [p for p in pruefungen if p["judge"]]
+    judge = [{"name": k, "ok": sum(bool(p["judge"].get(k)) for p in urteile), "gesamt": len(urteile)}
+             for k in ("keine_spekulation", "keine_zusage")]
+    pruef_nach_lauf: dict[str, list] = {}
+    for p in pruefungen:
+        pruef_nach_lauf.setdefault(p["run_id"], []).append(p)
+    return {
+        "anzahl": len(im_monat), "fertig": len(fertig), "fehler": len(fehler),
+        "abgebrochen": sum(l["status"] == "abgebrochen" for l in im_monat),
+        "verfallen": sum(l["status"] == "verfallen" for l in im_monat),
+        "fehlerquote": (len(fehler) / len(beendet)) if beendet else None,
+        "kosten_agent": agent_kosten, "kosten_pruefung": pruef_kosten, "kosten_antwort": antwort_kosten,
+        "kosten_gesamt": agent_kosten + pruef_kosten + antwort_kosten,
+        "kosten_je_lauf": (sum(l["kosten_usd"] or 0 for l in fertig) / len(fertig)) if fertig else None,
+        "dauer_p50": _p(dauern, 0.5), "dauer_p95": _p(dauern, 0.95),
+        "tage": tageswerte, "max_tag": max_tag,
+        "regeln": regeln, "judge": judge, "urteile": len(urteile),
+        "letzte": [{**l, "pruefungen": pruef_nach_lauf.get(l["run_id"], [])} for l in laeufe[:20]],
+    }

@@ -219,7 +219,8 @@ def test_sse_liefert_schritte_ergebnis_und_ende(client):
     assert "Sucht das Kundenkonto" in ev[1]["data"] and "Konto gefunden: Anna Berger" in ev[1]["data"]
     assert "54,34 USD" in ev[3]["data"] and "wartet auf Freigabe" in ev[3]["data"]
     assert "fertig" in ev[5]["data"]
-    assert "Entwurf." in ev[6]["data"] and "Hallo Anna" in ev[6]["data"]
+    assert "Erstattung in Prüfung" in ev[6]["data"] and "Hallo Anna" in ev[6]["data"]  # Variante A: Zwischenbescheid
+    assert "zur Erstattung weitergeleitet" not in ev[6]["data"]                                  # Agent-Entwurf nicht beim Kunden
     assert "Fertig" in ev[7]["data"] and "0,03 USD" in ev[7]["data"] and "zur Support-Konsole" in ev[7]["data"]
     # Alle drei Abschluss-Teile tragen die ID des Ergebnis-Ereignisses (5)
     assert [e.get("id") for e in ev[:8]] == [0, 1, 2, 3, 4, 5, 5, 5]
@@ -296,7 +297,7 @@ def test_freigabe_bestaetigen_nur_einmal(client):
     eid = client.app.state.speicher.offene_empfehlungen()[0]["empfehlungs_id"]
     r = client.get("/freigaben")
     assert "Echte Doppelabbuchung" in r.text and "Z005" in r.text and 'class="badge offen">offen<' in r.text
-    r = client.post(f"/freigaben/{eid}", data={"entscheidung": "bestaetigt", "kommentar": " passt "})
+    r = client.post(f"/freigaben/{eid}", data={"entscheidung": "bestaetigt", "begruendung": " passt "})
     assert "Entscheidung gespeichert" in r.text and "Keine offenen Empfehlungen" in r.text
     assert 'class="badge bestaetigt">bestätigt<' in r.text and "100 %" in r.text
     r = client.post(f"/freigaben/{eid}", data={"entscheidung": "abgelehnt"})

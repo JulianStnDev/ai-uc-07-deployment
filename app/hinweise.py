@@ -24,6 +24,13 @@ INFO = {
     "schritte": "Wie oft der Agent nachgedacht und dann gehandelt hat, bis der Fall erledigt war.",
     "notiz": "Zwischendurch schreibt der Agent kurz auf, was er vorhat. Das hilft beim Nachvollziehen, der Kunde sieht es nicht.",
     "erinnerung": "Vergisst der Agent eine Pflicht, etwa den Antwortentwurf, erinnert ihn der Programmcode daran. Die Zahl zeigt, wie oft das nötig war.",
+    "zwischenbescheid": "Über eine Erstattung entscheidet ein Mensch. Bis dahin bekommt der Kunde nur diese Eingangsbestätigung, damit ihm nichts versprochen wird, was noch nicht feststeht.",
+    "agententwurf": "So hatte der Agent geantwortet. Weil er darin Erstattungen zusagen kann, die erst ein Mensch entscheidet, geht dieser Text so nicht an den Kunden.",
+    "endgueltig": "Diese Antwort entsteht erst nach der Entscheidung in der Support-Konsole. Sie teilt dem Kunden das Ergebnis mit und wird vor dem Versand noch geprüft.",
+    "pruefung": "Nach jedem Durchlauf prüft der Programmcode feste Regeln. Jeden fünften Durchlauf liest zusätzlich ein zweites KI-Modell den Antworttext gegen.",
+    "spekulation": "Steht im Antworttext etwas über den Fall, das der Agent nirgends nachgelesen hat? Dann gilt der Text als spekulativ.",
+    "zusage": "Sagt der Text eine Erstattung als sicher zu, über die noch kein Mensch entschieden hat? Das darf nicht passieren.",
+    "fehlerquote": "Anteil der Durchläufe, die mit einem Fehler endeten oder abgebrochen wurden. Anliegen, die nie gestartet sind, zählen nicht mit.",
     "blockiert": "Der Agent darf nur seine sieben Support-Werkzeuge benutzen. Alles andere lehnt der Programmcode ab, bevor es ausgeführt wird.",
 }
 

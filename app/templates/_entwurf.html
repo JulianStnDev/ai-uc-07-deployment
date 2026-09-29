@@ -1,8 +1,22 @@
-<div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support · Antwortentwurf {{ info("entwurf", "Antwortentwurf") }}</div>
-{% if ergebnis.entwurf %}
-<div class="entwurf-hinweis" role="note"><span aria-hidden="true">✎</span><span><strong>Entwurf.</strong> Wird vor dem Versand von einem Menschen geprüft.</span></div>
-<div class="nachricht support">{{ ergebnis.entwurf }}</div>
+{# Kundensicht (Variante A). Wartet der Kunde auf eine Entscheidung, fragt die Seite regelmäßig nach. #}
+<div id="kundensicht" {% if sicht.art in ("zwischenbescheid", "wird_geschrieben") %}hx-get="/lauf/{{ run_id }}/antwort" hx-trigger="every 4s" hx-swap="outerHTML"{% endif %}>
+{% if sicht.art == "entwurf" %}
+  <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support · Antwortentwurf {{ info("entwurf", "Antwortentwurf") }}</div>
+  {% if sicht.text %}
+  <div class="entwurf-hinweis" role="note"><span aria-hidden="true">✎</span><span><strong>Entwurf.</strong> Wird vor dem Versand von einem Menschen geprüft.</span></div>
+  <div class="nachricht support">{{ sicht.text }}</div>
+  {% elif ergebnis.status == "verfallen" %}<p class="leise">Dein Anliegen wurde noch nicht bearbeitet. <a href="/anliegen">Noch einmal versuchen</a></p>
+  {% else %}<p class="leise">Es gibt keinen Antwortentwurf. Ein Mitarbeiter meldet sich persönlich.</p>{% endif %}
+{% elif sicht.art == "zwischenbescheid" %}
+  <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support · Zwischenbescheid {{ info("zwischenbescheid", "Zwischenbescheid") }}</div>
+  <div class="entwurf-hinweis" role="note"><span aria-hidden="true">⏳</span><span><strong>Erstattung in Prüfung.</strong> Ein Mensch entscheidet in der <a href="/freigaben">Support-Konsole</a>. Danach erscheint hier die endgültige Antwort.</span></div>
+  <div class="nachricht support">{{ sicht.text }}</div>
+{% elif sicht.art == "wird_geschrieben" %}
+  <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support</div>
+  <p class="leise" role="status"><span class="punkt-klein" aria-hidden="true"></span> Die Entscheidung ist gefallen, die Antwort wird geschrieben …</p>
 {% else %}
-{% if ergebnis.status == "verfallen" %}<p class="leise">Dein Anliegen wurde noch nicht bearbeitet. <a href="/anliegen">Noch einmal versuchen</a></p>
-{% else %}<p class="leise">Es gibt keinen Antwortentwurf. Ein Mitarbeiter meldet sich persönlich.</p>{% endif %}
+  <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support · Antwort nach Freigabe {{ info("endgueltig", "Antwort nach Freigabe") }}</div>
+  <div class="entwurf-hinweis" role="note"><span aria-hidden="true">✎</span><span><strong>Entwurf.</strong> Wird vor dem Versand von einem Menschen geprüft.{% if sicht.quelle == "vorlage" %} Aus einer festen Vorlage erstellt.{% endif %}</span></div>
+  <div class="nachricht support">{{ sicht.text }}</div>
 {% endif %}
+</div>

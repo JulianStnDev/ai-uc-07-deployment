@@ -37,11 +37,32 @@ SCHEMA = [
         betrag_usd      DOUBLE PRECISION NOT NULL,
         begruendung     TEXT NOT NULL
     )""",
+    """CREATE TABLE IF NOT EXISTS pruefungen (
+        pruefungs_id    TEXT PRIMARY KEY,           -- run_id + ':' + art
+        run_id          TEXT NOT NULL REFERENCES laeufe(run_id),
+        art             TEXT NOT NULL,              -- agent (nach dem Lauf) | antwort (endgültige Antwort)
+        erstellt        TEXT NOT NULL,
+        regeln          TEXT,                       -- JSON: Regelprüfungen ohne LLM
+        judge           TEXT,                       -- JSON: Urteil des LLM-Judges (nur Stichprobe)
+        modell          TEXT,
+        kosten_usd      DOUBLE PRECISION NOT NULL DEFAULT 0,
+        fehler          TEXT
+    )""",
+    """CREATE TABLE IF NOT EXISTS antworten (
+        run_id          TEXT PRIMARY KEY REFERENCES laeufe(run_id),
+        erstellt        TEXT NOT NULL,
+        text            TEXT NOT NULL,
+        quelle          TEXT NOT NULL,              -- llm | vorlage
+        entscheidungen  TEXT,                       -- JSON: Stand der Freigaben beim Schreiben
+        modell          TEXT,
+        kosten_usd      DOUBLE PRECISION NOT NULL DEFAULT 0
+    )""",
     """CREATE TABLE IF NOT EXISTS freigaben (
         empfehlungs_id  TEXT PRIMARY KEY REFERENCES empfehlungen(empfehlungs_id),
         entscheidung    TEXT NOT NULL CHECK (entscheidung IN ('bestaetigt', 'abgelehnt')),
-        kommentar       TEXT NOT NULL DEFAULT '',
-        entschieden     TEXT NOT NULL
+        kommentar       TEXT NOT NULL DEFAULT '',   -- Begründung für den Kunden: geht in die endgültige Antwort
+        entschieden     TEXT NOT NULL,
+        notiz           TEXT NOT NULL DEFAULT ''    -- interne Notiz: nur Protokoll und Konsole, nie an ein Modell
     )""",
 ]
 
@@ -76,6 +97,8 @@ class _Sqlite:
             spalten = {r["name"] for r in x("PRAGMA table_info(laeufe)")}
             if "titel" not in spalten:  # Datenbank aus Branch (a)
                 x("ALTER TABLE laeufe ADD COLUMN titel TEXT")
+            if "notiz" not in {r["name"] for r in x("PRAGMA table_info(freigaben)")}:  # Datenbank vor der Notiz
+                x("ALTER TABLE freigaben ADD COLUMN notiz TEXT NOT NULL DEFAULT ''")
 
 
 class _Postgres:
@@ -100,6 +123,7 @@ class _Postgres:
         with self.verbindung() as x:
             for s in SCHEMA:
                 x(s)
+            x("ALTER TABLE freigaben ADD COLUMN IF NOT EXISTS notiz TEXT NOT NULL DEFAULT ''")  # Datenbank vor der Notiz
 
     def schliessen(self):
         self.pool.close()
@@ -180,10 +204,16 @@ class Speicher:
     # ---------- Budget ----------
 
     def kosten_im_monat(self, monat: str) -> float:
-        """monat im Format 'YYYY-MM' (UTC). Summe aller abgeschlossenen Läufe."""
-        return float(self._eins(
+        """monat im Format 'YYYY-MM' (UTC). Alle API-Kosten: abgeschlossene Läufe, Prüfungen, endgültige Antworten."""
+        laeufe = self._eins(
             "SELECT COALESCE(SUM(kosten_usd), 0) AS s FROM laeufe WHERE substr(erstellt, 1, 7)=? AND status NOT IN (?, ?)",
-            (monat, *OFFEN))["s"])
+            (monat, *OFFEN))["s"]
+        return float(laeufe) + self.pruefungskosten_im_monat(monat) + float(self._eins(
+            "SELECT COALESCE(SUM(kosten_usd), 0) AS s FROM antworten WHERE substr(erstellt, 1, 7)=?", (monat,))["s"])
+
+    def pruefungskosten_im_monat(self, monat: str) -> float:
+        return float(self._eins("SELECT COALESCE(SUM(kosten_usd), 0) AS s FROM pruefungen WHERE substr(erstellt, 1, 7)=?",
+                                (monat,))["s"])
 
     def laufende_im_monat(self, monat: str) -> int:
         return self._eins("SELECT COUNT(*) AS n FROM laeufe WHERE substr(erstellt, 1, 7)=? AND status IN (?, ?)",
@@ -198,22 +228,23 @@ class Speicher:
 
     def entschiedene_empfehlungen(self, limit: int = 20) -> list[dict]:
         return self._alle(
-            "SELECT e.*, f.entscheidung, f.kommentar, f.entschieden, l.titel FROM empfehlungen e JOIN laeufe l USING (run_id) "
+            "SELECT e.*, f.entscheidung, f.kommentar, f.notiz, f.entschieden, l.titel FROM empfehlungen e JOIN laeufe l USING (run_id) "
             "JOIN freigaben f USING (empfehlungs_id) ORDER BY f.entschieden DESC LIMIT ?", (limit,))
 
     def empfehlungen_zum_lauf(self, run_id: str) -> list[dict]:
+        """Grundlage der endgültigen Antwort. Die interne Notiz fehlt hier absichtlich."""
         return self._alle(
             "SELECT e.*, f.entscheidung, f.kommentar FROM empfehlungen e "
             "LEFT JOIN freigaben f USING (empfehlungs_id) WHERE e.run_id=? ORDER BY e.erstellt", (run_id,))
 
-    def entscheiden(self, empfehlungs_id: str, entscheidung: str, kommentar: str) -> bool:
+    def entscheiden(self, empfehlungs_id: str, entscheidung: str, kommentar: str, notiz: str = "") -> bool:
         """Speichert genau eine Entscheidung je Empfehlung. False, wenn unbekannt oder schon entschieden."""
         if entscheidung not in ("bestaetigt", "abgelehnt"):
             raise ValueError(f"Unbekannte Entscheidung: {entscheidung!r}")
         try:
             with self.backend.verbindung() as x:
-                x("INSERT INTO freigaben (empfehlungs_id, entscheidung, kommentar, entschieden) VALUES (?, ?, ?, ?)",
-                  (empfehlungs_id, entscheidung, kommentar.strip(), jetzt_iso()))
+                x("INSERT INTO freigaben (empfehlungs_id, entscheidung, kommentar, notiz, entschieden) VALUES (?, ?, ?, ?, ?)",
+                  (empfehlungs_id, entscheidung, kommentar.strip(), notiz.strip(), jetzt_iso()))
         except self.backend.fehler_integritaet:  # schon entschieden oder Empfehlung gibt es nicht
             return False
         return True
@@ -228,6 +259,56 @@ class Speicher:
                 faelle.append({"run_id": r["run_id"], "erstellt": r["erstellt"], "kunden_id": r["kunden_id"],
                                "titel": r["titel"], "grund": u["grund"], "prioritaet": u["prioritaet"]})
         return faelle
+
+    # ---------- Prüfungen und endgültige Antworten ----------
+
+    def pruefung_speichern(self, run_id: str, art: str, regeln: dict | None, judge: dict | None, modell: str | None,
+                           kosten_usd: float, fehler: str | None = None) -> None:
+        pid = f"{run_id}:{art}"
+        with self.backend.verbindung() as x:
+            x("DELETE FROM pruefungen WHERE pruefungs_id=?", (pid,))
+            x("INSERT INTO pruefungen (pruefungs_id, run_id, art, erstellt, regeln, judge, modell, kosten_usd, fehler) "
+              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              (pid, run_id, art, jetzt_iso(), json.dumps(regeln, ensure_ascii=False) if regeln is not None else None,
+               json.dumps(judge, ensure_ascii=False) if judge is not None else None, modell, kosten_usd, fehler))
+
+    def pruefungen_zum_lauf(self, run_id: str) -> list[dict]:
+        return [self._pruefung(r) for r in self._alle("SELECT * FROM pruefungen WHERE run_id=? ORDER BY erstellt", (run_id,))]
+
+    def pruefungen(self, limit: int = 500) -> list[dict]:
+        return [self._pruefung(r) for r in self._alle("SELECT * FROM pruefungen ORDER BY erstellt DESC LIMIT ?", (limit,))]
+
+    @staticmethod
+    def _pruefung(r: dict) -> dict:
+        r["regeln"] = json.loads(r["regeln"]) if r["regeln"] else None
+        r["judge"] = json.loads(r["judge"]) if r["judge"] else None
+        return r
+
+    def antwort_speichern(self, run_id: str, text: str, quelle: str, entscheidungen: list[dict], modell: str | None,
+                          kosten_usd: float) -> bool:
+        try:
+            with self.backend.verbindung() as x:
+                x("INSERT INTO antworten (run_id, erstellt, text, quelle, entscheidungen, modell, kosten_usd) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                  (run_id, jetzt_iso(), text, quelle, json.dumps(entscheidungen, ensure_ascii=False), modell, kosten_usd))
+        except self.backend.fehler_integritaet:  # gibt es schon
+            return False
+        return True
+
+    def antwort(self, run_id: str) -> dict | None:
+        return self._eins("SELECT * FROM antworten WHERE run_id=?", (run_id,))
+
+    def run_id_zur_empfehlung(self, empfehlungs_id: str) -> str | None:
+        r = self._eins("SELECT run_id FROM empfehlungen WHERE empfehlungs_id=?", (empfehlungs_id,))
+        return r["run_id"] if r else None
+
+    def laeufe_uebersicht(self, limit: int = 1000) -> list[dict]:
+        """Für die Betriebsseite: die letzten Läufe ohne die großen JSON-Spalten."""
+        return self._alle("SELECT run_id, erstellt, kunden_id, titel, status, kosten_usd, kosten_pauschal, dauer_s "
+                          "FROM laeufe ORDER BY erstellt DESC LIMIT ?", (limit,))
+
+    def antworten_kosten(self, monat: str) -> float:
+        return float(self._eins("SELECT COALESCE(SUM(kosten_usd), 0) AS s FROM antworten WHERE substr(erstellt, 1, 7)=?",
+                                (monat,))["s"])
 
     def freigabe_statistik(self) -> dict:
         r = self._eins("SELECT COUNT(*) AS gesamt, "

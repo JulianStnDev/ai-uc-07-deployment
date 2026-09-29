@@ -34,10 +34,17 @@
       <dt>Anliegen</dt><dd>{{ e.titel or e.ticket_text[:60] }} · <a href="/lauf/{{ e.run_id }}">ganzen Fall ansehen</a></dd>
     </dl>
     <div class="begruendung"><strong>Begründung des Agents:</strong> {{ e.begruendung }}</div>
+    {% if entwuerfe.get(e.run_id) %}
+    <details class="agent-entwurf"><summary>Entwurf des Agents (intern) {{ info("agententwurf", "Entwurf des Agents") }}</summary>
+      <div class="nachricht support">{{ entwuerfe[e.run_id] }}</div></details>
+    {% endif %}
+    <p class="sehr-leise" style="margin-top: 8px;">Nach deiner Entscheidung wird die endgültige Antwort an den Kunden geschrieben.</p>
   </div>
   <form class="entscheidung" method="post" action="/freigaben/{{ e.empfehlungs_id }}" aria-label="Entscheidung zu {{ e.betrag_usd | usd }} für {{ k.name }}">
-    <label for="k-{{ loop.index }}" class="sehr-leise" style="font-weight: 500;">Kommentar (optional)</label>
-    <input id="k-{{ loop.index }}" name="kommentar" maxlength="1000" placeholder="z. B. Grund der Ablehnung">
+    <label for="k-{{ loop.index }}" class="sehr-leise" style="font-weight: 500;">Begründung für den Kunden (optional)</label>
+    <input id="k-{{ loop.index }}" name="begruendung" maxlength="1000" placeholder="geht in die Antwort, z. B. Grund der Ablehnung">
+    <label for="n-{{ loop.index }}" class="sehr-leise" style="font-weight: 500;">Interne Notiz (optional)</label>
+    <input id="n-{{ loop.index }}" name="notiz" maxlength="1000" placeholder="nur fürs Protokoll, geht nie an den Kunden">
     <button class="knopf gruen" name="entscheidung" value="bestaetigt">✓ Bestätigen</button>
     <button class="knopf rot" name="entscheidung" value="abgelehnt">Ablehnen</button>
   </form>
@@ -49,7 +56,7 @@
 <h2 class="abschnitt-titel">Zuletzt entschieden</h2>
 <div class="karte" style="padding: 16px 12px;">
   <table class="tabelle">
-    <thead><tr><th>Zeit (UTC)</th><th>Kunde</th><th>Betrag</th><th>Status</th><th>Kommentar</th><th><span class="nur-sr">Fall</span></th></tr></thead>
+    <thead><tr><th>Zeit (UTC)</th><th>Kunde</th><th>Betrag</th><th>Status</th><th>Begründung (Kunde)</th><th>Interne Notiz</th><th><span class="nur-sr">Fall</span></th></tr></thead>
     <tbody>
     {% for e in entschieden %}
     <tr>
@@ -58,6 +65,7 @@
       <td><strong>{{ e.betrag_usd | usd }}</strong></td>
       <td>{% if e.entscheidung == "bestaetigt" %}<span class="badge bestaetigt">bestätigt</span>{% else %}<span class="badge abgelehnt">abgelehnt</span>{% endif %}</td>
       <td class="leise">{{ e.kommentar or "–" }}</td>
+      <td class="leise">{{ e.notiz or "–" }}</td>
       <td><a href="/lauf/{{ e.run_id }}">Fall</a></td>
     </tr>
     {% endfor %}
