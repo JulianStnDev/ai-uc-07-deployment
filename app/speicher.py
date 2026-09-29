@@ -234,7 +234,7 @@ class Speicher:
     def empfehlungen_zum_lauf(self, run_id: str) -> list[dict]:
         """Grundlage der endgültigen Antwort. Die interne Notiz fehlt hier absichtlich."""
         return self._alle(
-            "SELECT e.*, f.entscheidung, f.kommentar FROM empfehlungen e "
+            "SELECT e.*, f.entscheidung, f.kommentar, f.entschieden FROM empfehlungen e "
             "LEFT JOIN freigaben f USING (empfehlungs_id) WHERE e.run_id=? ORDER BY e.erstellt", (run_id,))
 
     def entscheiden(self, empfehlungs_id: str, entscheidung: str, kommentar: str, notiz: str = "") -> bool:

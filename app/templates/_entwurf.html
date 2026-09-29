@@ -16,7 +16,8 @@
   <p class="leise" role="status"><span class="punkt-klein" aria-hidden="true"></span> Die Entscheidung ist gefallen, die Antwort wird geschrieben …</p>
 {% else %}
   <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support · Antwort nach Freigabe {{ info("endgueltig", "Antwort nach Freigabe") }}</div>
-  <div class="entwurf-hinweis" role="note"><span aria-hidden="true">✎</span><span><strong>Entwurf.</strong> Wird vor dem Versand von einem Menschen geprüft.{% if sicht.quelle == "vorlage" %} Aus einer festen Vorlage erstellt.{% endif %}</span></div>
+  {# Der Mensch hat über die Erstattung entschieden, den Text selbst hat er nicht gelesen. Deshalb "entschieden", nicht "freigegeben". #}
+  <div class="entwurf-hinweis entschieden" role="note"><span aria-hidden="true">✓</span><span><strong>Vom Support entschieden am {{ sicht.entschieden | datum }} UTC</strong> (Erstattung {{ "bestätigt" if sicht.bestaetigt else "abgelehnt" }}). Diese Antwort beruht auf der Entscheidung{% if sicht.quelle == "vorlage" %} und stammt aus einer festen Vorlage{% endif %}.</span></div>
   <div class="nachricht support">{{ sicht.text }}</div>
 {% endif %}
 </div>

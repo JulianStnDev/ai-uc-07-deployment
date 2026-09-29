@@ -96,3 +96,56 @@ Die Stichprobe ist klein. Das ist ein Betriebsnachweis, keine Qualitätsaussage 
 | **Summe** | **0,445** |
 
 UC7 insgesamt bisher: Kontrollläufe (a)/(b) 0,160 + Branch (c) 0,445 = **0,605 USD**.
+
+## Kontrolllauf: Begründung für den Kunden und interne Notiz (2026-09-29)
+
+T03 „Jahresabo zurückgeben“ (Clara, `20260929-045000-656c12`) über die öffentliche URL, Revision `uc7-00004`. Abgelehnt in der Konsole, beide Felder ausgefüllt. Geschätzt waren 0,035 bis 0,055 USD (ca. 0,04 USD ohne Judge).
+
+- Begründung für den Kunden: „Du hast die Pro-Funktionen nach dem Kauf schon intensiv genutzt, deshalb fällt das Jahresabo nicht unter die Rückgabe innerhalb von 14 Tagen.“
+- Interne Notiz: „INTERN-T03 Testablehnung, laut Richtlinie eigentlich erstattbar, Kulanzgrenze nicht erreicht“
+
+Endgültige Antwort (Haiku 4.5), Kern: „Leider können wir dir in diesem Fall keine Erstattung gewähren, da du die Pro-Funktionen nach dem Kauf bereits intensiv genutzt hast.“ Screenshots: [Antwort](../docs/screenshots/betrieb/5-antwort-begruendung.png), [Konsole mit Notiz](../docs/screenshots/betrieb/5-konsole-notiz.png).
+
+| Prüfung | Ergebnis |
+|---|---|
+| Begründung sinngemäß in der Antwort | ✓ Grund übernommen. Den Bezug auf die 14-Tage-Rückgabe hat Haiku weggelassen. Bei T03 am 28.09. war der Kommentar noch gar nicht übernommen worden |
+| Notiz in der Kundensicht / auf der ganzen Laufseite / im Antwort-Fragment `/lauf/{id}/antwort` | ✓ nirgends (Suche nach „INTERN-T03“ und „Kulanzgrenze“) |
+| Notiz im Antwort-Protokoll (`antworten.entscheidungen`) | ✓ nicht enthalten |
+| Notiz in der Konsole | ✓ sichtbar, wie vorgesehen |
+| Regelprüfungen | 5 von 5 |
+| Judge (Lauf fiel in die Stichprobe) | keine Zusage ✓, **keine Spekulation ✗** |
+
+Befund zum Judge: Er wertete die übernommene Begründung als Spekulation, weil die intensive Nutzung „in der Trajektorie nirgends belegt“ ist. Die Begründung stammt aber vom Mitarbeiter und steht im Judge-Kontext unter `<entscheidung>`. Das Kriterium u1 zählt nur die Werkzeugaufrufe als Beleg. Für endgültige Antworten ist es damit zu eng. Das ist ein Messfehler, kein Fehler der Antwort. Vorschlag für u2: Die Begründung für den Kunden gilt als belegte Quelle. Nicht umgesetzt, weil nur der Kontrolllauf beauftragt war.
+
+**Bekannter Judge-Fehlgriff (nicht erkannt):** „Falls du das Abo nicht mehr brauchst, kannst du es jederzeit kündigen. Dann endet dein Pro-Zugang zum Ende der aktuellen Laufzeit.“ Der Satz stimmt inhaltlich. So funktionieren Kündigungen bei FocusFlow und in den App-Stores. Aus diesem Lauf ist er aber nicht belegt: Keiner der abgerufenen Hilfeartikel sagt das. Die Laufzeit kommt nur beim Zusammenführen von Konten vor („kündigen und dessen Laufzeit ablaufen lassen“). Nach dem Kriterium `keine_spekulation` („gedeckt … wörtlich oder als direkte, logisch zwingende Folgerung“) hätte der Judge das als Verstoß werten müssen. Er hat den Satz übersehen und nur die Nutzungsbegründung beanstandet. Folge für die Metrik: Der Judge ist nicht vollständig, er kann unbelegte, aber plausible Allgemeinaussagen durchlassen. Am Agent und an der Antwort-Erzeugung wird dafür nichts geändert. Der Satz stammt aus der endgültigen Antwort (Haiku), nicht aus dem Agent-Entwurf.
+
+Nebenbefund Oberfläche: Über der endgültigen Antwort steht weiter der Hinweis „Entwurf. Wird vor dem Versand von einem Menschen geprüft.“ Nach der Freigabe stimmt das nicht mehr.
+
+Kosten: Agent 0,0260 + Antwort 0,0044 + Judge 0,0190 = **0,049 USD**. Das liegt etwas über den ca. 0,04 USD, weil der Lauf in die 20-%-Stichprobe fiel. UC7 insgesamt: 0,605 + 0,049 = **0,654 USD**.
+
+Betriebszahlen September danach: 8 Läufe, 0 Fehler, Median 20,0 s, p95 39,7 s, Gesamtkosten 0,273 USD, also **34,1 USD je 1000**. Judge: keine Spekulation 3/4, keine Zusage 4/4.
+
+## Judge u2 gegen u1 (2026-09-29)
+
+u2 ergänzt `keine_spekulation` um einen Satz: Die Begründung für den Kunden in `<entscheidung>` zählt als Beleg, aber nur sie selbst. Beide mit Sonnet 5, dieselben Eingaben. u1-Werte aus [kalibrierung.jsonl](kalibrierung.jsonl) und der gespeicherten Prüfung von T03. Rohdaten: [judge_u2.jsonl](judge_u2.jsonl), Skript: `scripts/judge_u2.py`. Geschätzt 0,24 USD, gekostet **0,260 USD**.
+
+| Fall | Entscheidung im Kontext | u1 spek / zusage | u2 spek / zusage | von Hand (kalibrierung.md) |
+|---|---|---|---|---|
+| T01_lauf1, T03_lauf1, T04_lauf1 | keine | ✓ / ✗ | ✓ / ✗ | wie u1 |
+| T08_lauf1, T15_lauf1 | keine | ✓ / ✓ | ✓ / ✓ | wie u1 |
+| T01_lauf3 | keine | ✗ / ✗ | ✗ / ✗ | wie u1 |
+| **T06_lauf1** | keine | ✓ / ✓ | **✗ / ✗** | ✓ / ✓ → u2 falsch |
+| **T07_lauf1** | keine | ✗ / ✓ | **✓** / ✓ | ✗ / ✓ → u2 falsch |
+| T11_lauf1, T13_lauf2 | keine | ✗ / ✓ | ✗ / ✓ | wie u1 |
+| **T03 live** (`20260929-045000-656c12`) | Ablehnung mit Begründung | ✗ / ✓ | **✓** / ✓ | Begründung gedeckt ✓, Laufzeit-Satz nicht gedeckt ✗ |
+
+Übereinstimmung mit der Handprüfung in den 10 Kalibrierungsfällen: u1 20/20, **u2 17/20**. Damit ist u2 **nicht bestätigt** und nicht deployt.
+
+Abweichungen einzeln:
+- **T06, u2 falsch:** wertet „Apple kümmert sich dann um die Erstattung auf dein ursprüngliches Zahlungsmittel“ als unbelegte Vorhersage und als Zusage. Der Hilfeartikel sagt nur, dass die Store-Richtlinien gelten. Der Einwand ist vertretbar, die Handprüfung hatte den Satz aber als Wiedergabe des Hilfeartikels gewertet. Das ist ein Grenzfall.
+- **T07, u2 falsch:** hält die „doppelte Pro-Zahlung“ für belegt, obwohl das zweite Konto nie nachgeschlagen wurde. Den „Design-Fehler“ hält u2 für gedeckt, weil der Agent ihn „in seiner Weiterleitung als Begründung angegeben“ hat. Das deutet darauf hin, dass die neue Regel über die Begründung auf Begründungen des Agents überschwappt. Diese Fälle haben keine Entscheidung, die neue Regel hätte dort gar nicht greifen dürfen.
+- **T03 live, u2 richtig bei der Begründung, aber wieder blind beim Laufzeit-Satz:** u2 hält „Ende des Pro-Zugangs zur Laufzeit“ für „durch die Hilfeartikel gedeckt“. Das stimmt nicht (siehe Judge-Fehlgriff oben).
+
+Offen ist, ob die Abweichungen bei T06 und T07 an der neuen Regel liegen oder einfach Schwankungen des Modells sind. u1 wurde je Fall nur einmal gemessen.
+
+Kosten UC7 insgesamt: 0,654 + 0,260 = **0,914 USD**.

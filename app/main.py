@@ -170,7 +170,9 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
             return {"art": "entwurf", "text": ergebnis.get("entwurf")}
         a = speicher.antwort(lauf["run_id"])
         if a:
-            return {"art": "antwort", "text": a["text"], "quelle": a["quelle"]}
+            return {"art": "antwort", "text": a["text"], "quelle": a["quelle"],
+                    "entschieden": max(e["entschieden"] for e in empfehlungen),
+                    "bestaetigt": all(e["entscheidung"] == "bestaetigt" for e in empfehlungen)}
         if any(e["entscheidung"] is None for e in empfehlungen):
             return {"art": "zwischenbescheid", "text": antwort.zwischenbescheid(KUNDEN[lauf["kunden_id"]]["name"])}
         return {"art": "wird_geschrieben", "text": None}

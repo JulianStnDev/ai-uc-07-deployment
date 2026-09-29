@@ -124,6 +124,31 @@ def test_interne_notiz_nicht_in_der_vorlage(tmp_path, monkeypatch):
     c.__exit__(None, None, None)
 
 
+def test_hinweis_nach_entscheidung_statt_entwurf(tmp_path):
+    c = app_client(tmp_path)
+    run_id = starte(c)
+    sp = c.app.state.speicher
+    eid = sp.offene_empfehlungen()[0]["empfehlungs_id"]
+    c.post(f"/freigaben/{eid}", data={"entscheidung": "abgelehnt", "begruendung": BEGRUENDUNG})
+    warte(lambda: sp.antwort(run_id) is not None)
+    tag = sp.entschiedene_empfehlungen()[0]["entschieden"]
+    for html in (c.get(f"/lauf/{run_id}").text, c.get(f"/lauf/{run_id}/antwort").text):
+        kunde = html[html.index('id="kundensicht"'):]
+        assert "Vom Support entschieden am" in kunde and f"{tag[8:10]}.{tag[5:7]}.{tag[:4]}" in kunde
+        assert "Erstattung abgelehnt" in kunde and "Wird vor dem Versand" not in kunde
+    c.__exit__(None, None, None)
+
+
+def test_judge_u2_begruendung_als_beleg():
+    from app import antwort
+    assert pruefung.JUDGE_VERSION == "u2"
+    assert "Begründung für den Kunden, die in <entscheidung> steht" in pruefung.JUDGE_SYSTEM
+    entscheidung = antwort.entscheidungen_als_text([{"betrag_usd": 5.0, "zahlungs_id": "Z1", "entscheidung": "abgelehnt",
+                                                     "kommentar": BEGRUENDUNG}])
+    inhalt = pruefung.judge_inhalt("Ticket", "Antwort", [], entscheidung)
+    assert f"<entscheidung>\nErstattung über" in inhalt and f"Begründung für den Kunden: {BEGRUENDUNG}" in inhalt
+
+
 def test_antwort_faellt_auf_vorlage_zurueck(tmp_path, monkeypatch):
     def kaputt(*a, **k):
         raise ConnectionError("API weg")
@@ -136,7 +161,7 @@ def test_antwort_faellt_auf_vorlage_zurueck(tmp_path, monkeypatch):
     a = c.app.state.speicher.antwort(run_id)
     assert a["quelle"] == "vorlage" and a["kosten_usd"] == 0
     assert "Die Erstattung über 54,34 USD für deine Zahlung Z005 ist freigegeben." in a["text"]
-    assert "Aus einer festen Vorlage erstellt" in c.get(f"/lauf/{run_id}").text
+    assert "stammt aus einer festen Vorlage" in c.get(f"/lauf/{run_id}").text
     c.__exit__(None, None, None)
 
 

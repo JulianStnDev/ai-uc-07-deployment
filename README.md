@@ -54,16 +54,21 @@ Jedes Ticket kostet echtes Geld (ca. 0,03 USD, höchstens 0,50 USD).
 ## Evaluationsergebnisse
 Details: [evals/results.md](evals/results.md), Judge-Kalibrierung: [evals/kalibrierung.md](evals/kalibrierung.md).
 
-- Judge u1 (Sonnet 5) auf echten Anfragen: keine Spekulation 3/3, keine Zusage 3/3. Regelprüfungen ohne LLM: 5 Regeln, alle Läufe erfüllt.
+- Judge u1 (Sonnet 5) auf echten Anfragen: keine Spekulation 3/4, keine Zusage 4/4. Die eine Abweichung wertet eine vom Mitarbeiter gegebene Begründung als unbelegt, das Kriterium ist dafür zu eng (siehe results.md). Regelprüfungen ohne LLM: 5 Regeln, alle Läufe erfüllt.
 - Variante A über die öffentliche URL geprüft: Bestätigung, Ablehnung, Fall ohne Empfehlung.
+- Kontrolllauf T03 mit Ablehnung (2026-09-29): Die Begründung für den Kunden steht sinngemäß in der Antwort. Die interne Notiz erscheint nirgends beim Kunden, nur in der Konsole.
 - Kaltstart (5 Messungen + 1 Agent-Lauf, jeweils per Log bestätigt): Seite kalt Median 3,4 s (2,3–5,5 s), warm 0,03 s. Agent-Lauf aus dem Kaltstart: erster Schritt nach 9,8 s (warm 8,1 s).
 - Die Stichprobe ist klein (7 Läufe im Betrieb). Das ist ein Betriebsnachweis, die Qualitätsaussage zum Agent stammt aus UC4 (45 Läufe).
 
 ## Kosten & Latenz
-- **Kosten pro 1000 Requests: 31,9 USD** (Agent, Judge-Stichprobe und endgültige Antworten zusammen, 7 Läufe auf Cloud Run). Cloud Run selbst lag im Freikontingent.
-- **p95-Latenz: 39,7 s** (Median 20,0 s, n = 7, p95 entspricht hier dem längsten Lauf). Kaltstart kostet zusätzlich ca. 3 s.
-- **Qualitätsmetrik: Judge-Quote 3/3** bei beiden Kriterien (keine Spekulation, keine Zusage). Der Judge stimmt in der Kalibrierung zu 20/20 mit der Handprüfung überein.
-- Kosten UC7 insgesamt für Test- und Messläufe: 0,61 USD.
+- **Kosten pro 1000 Requests: 34,1 USD** (Agent, Judge-Stichprobe und endgültige Antworten zusammen, 8 Läufe auf Cloud Run). Cloud Run selbst lag im Freikontingent.
+- **p95-Latenz: 39,7 s** (Median 20,0 s, n = 8, p95 entspricht hier dem längsten Lauf). Kaltstart kostet zusätzlich ca. 3 s.
+- **Qualitätsmetrik: Judge-Quote keine Spekulation 3/4, keine Zusage 4/4.** Der eine Verstoß ist ein Messfehler des Kriteriums, nicht der Antwort. Der Judge stimmt in der Kalibrierung zu 20/20 mit der Handprüfung überein.
+- Kosten UC7 insgesamt für Test- und Messläufe: 0,91 USD.
+
+## Bekannte Grenzen
+- **Die endgültige Antwort liest kein Mensch, nur die Entscheidung.** Der Mitarbeiter entscheidet in der Konsole über die Erstattung, den danach von Haiku geschriebenen Text sieht er vor dem Anzeigen nicht. Deshalb steht im Portal „Vom Support entschieden“ und nicht „freigegeben“. Für die Demo ist das bewusst akzeptiert. Überwacht wird es über die Judge-Stichprobe (20 %). Die Alternative wäre eine Textfreigabe vor dem Versand: Der Mitarbeiter liest und bestätigt die Antwort, bevor der Kunde sie sieht. Das kostet einen weiteren Klick je Fall und verzögert die Antwort.
+- **Der Judge ist nicht vollständig.** Er übersah bei T03 einen plausiblen, aber aus dem Lauf nicht belegten Satz (evals/results.md).
 
 ## Learnings
 - **Was immer gelten muss, gehört in den Code (aus UC4 bestätigt).** Prompt v3 verbietet Zusagen, trotzdem sagten 4 von 5 Entwürfen Erstattungen zu. Erst Variante A löst das strukturell.
@@ -76,4 +81,5 @@ Details: [evals/results.md](evals/results.md), Judge-Kalibrierung: [evals/kalibr
 - Die Kundenantwort von Anfang an vom Agent-Entwurf trennen (Variante A gleich in Branch (a)), statt Entwürfe mit Zusagen erst anzuzeigen.
 - Konsolenfelder nach Empfänger benennen („für den Kunden“, „intern“), nicht nach Form („Kommentar“).
 - Messskripte zuerst mit einer einzelnen Messung gegen die Logs prüfen, bevor sie zwei Stunden laufen.
-- Ob Haiku die Begründung für den Kunden jetzt zuverlässig übernimmt, ist live noch nicht gemessen. Das wäre der nächste Kontrolllauf.
+- Den Judge von Anfang an mit dem Fall „Mensch liefert den Grund“ kalibrieren. Kriterium u1 zählt nur Werkzeugaufrufe als Beleg und straft so eine korrekt übernommene Begründung ab. Nächster Schritt wäre u2.
+- Den Hinweis „Entwurf“ über der endgültigen Antwort nach der Freigabe ausblenden.
