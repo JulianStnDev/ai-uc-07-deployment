@@ -127,6 +127,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--akzent); outline
 .nachricht-kopf { display: flex; align-items: center; gap: var(--a2); font-size: .8rem; color: var(--text-3); margin: var(--a4) 0 6px; }
 .entwurf-hinweis { display: flex; gap: var(--a2); align-items: flex-start; background: var(--gelb-hell); color: #6b4a00; font-size: .85rem;
                    padding: 10px 12px; border-radius: 10px; margin-bottom: var(--a3); }
+.entwurf-hinweis.entschieden { background: var(--gruen-hell); color: #145c3c; }
 
 /* Zeitleiste */
 .zeitleiste { list-style: none; margin: 0; padding: 0; position: relative; }
