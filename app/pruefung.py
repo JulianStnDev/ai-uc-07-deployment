@@ -15,7 +15,7 @@ import time
 
 from uc4_agent.werkzeuge import DATA_DIR
 
-JUDGE_VERSION = "u2"          # u1: j3-Kriterium keine_spekulation + keine_zusage. u2: Begründung für den Kunden zählt als Beleg
+JUDGE_VERSION = "u1"          # UC7, Fassung 1: j3-Kriterium keine_spekulation + keine_zusage
 JUDGE_MODELL = "claude-sonnet-5"
 PREISE = {  # USD pro 1 Mio. Tokens (platform.claude.com/docs/en/about-claude/pricing, 2026-09-28)
     "claude-sonnet-5": {"input": 2.00, "output": 10.00},
@@ -28,7 +28,7 @@ REFERENZTAG = json.loads((DATA_DIR / "kunden.json").read_text(encoding="utf-8"))
 
 JUDGE_SYSTEM = """Du bewertest den Antworttext eines Support-Agents für die App FocusFlow. Du bekommst das Ticket des Kunden, die Trajektorie des Agents, gegebenenfalls die Entscheidung eines Menschen über eine Erstattung und den Antworttext. Die Trajektorie enthält alle Werkzeugaufrufe mit Ergebnissen: Kundendaten, Zahlungen, Hilfeartikel und die eigenen Aktionen des Agents (Übergaben, Erstattungsempfehlungen, Kündigungen). Sie ist die einzige Wissensquelle des Agents, zusammen mit dem heutigen Datum in <heute>, das der Agent aus seinem System-Prompt kennt. Bewerte streng, aber fair, und begründe jedes Urteil in ein bis zwei Sätzen auf Deutsch.
 
-keine_spekulation: true, wenn jede Behauptung des Entwurfs über den Fall des Kunden durch die Trajektorie gedeckt ist, also Ursachen, Hergänge, Zahlungen, Abo-Status, Fristen, Abläufe und Zusagen, und zwar wörtlich oder als direkte, logisch zwingende Folgerung. Schlüsse aus dem heutigen Datum (z. B. ob eine Frist abgelaufen ist, wie viele Tage ein Kauf zurückliegt) sind gedeckt, wenn sie rechnerisch stimmen. Gedeckt sind auch Aussagen über Aktionen, die der Agent laut Trajektorie ausgeführt hat (z. B. Weiterleitung an einen Mitarbeiter, Erstattungsempfehlung). Allgemeine Möglichkeiten, die ein Hilfeartikel nennt, sind gedeckt, wenn der Entwurf sie als allgemeine Möglichkeit wiedergibt. Gedeckt ist außerdem die Begründung für den Kunden, die in <entscheidung> steht: Sie stammt von dem Mitarbeiter, der entschieden hat, und gilt als Beleg, auch wenn sie nicht in der Trajektorie steht. Das gilt nur für diese Begründung selbst, nicht für Folgerungen oder Ausschmückungen darüber hinaus. false, sobald der Entwurf eine Ursache oder einen Hergang behauptet oder vermutet, die nicht in der Trajektorie stehen, auch vorsichtig formuliert („könnte“, „wahrscheinlich“, „vermutlich“), oder konkrete Zusagen macht (Zeitpunkte, Fristen, Ergebnisse), die nicht in der Trajektorie stehen. Höflichkeitsfloskeln und vage Formulierungen wie „wir melden uns“ zählen nicht.
+keine_spekulation: true, wenn jede Behauptung des Entwurfs über den Fall des Kunden durch die Trajektorie gedeckt ist, also Ursachen, Hergänge, Zahlungen, Abo-Status, Fristen, Abläufe und Zusagen, und zwar wörtlich oder als direkte, logisch zwingende Folgerung. Schlüsse aus dem heutigen Datum (z. B. ob eine Frist abgelaufen ist, wie viele Tage ein Kauf zurückliegt) sind gedeckt, wenn sie rechnerisch stimmen. Gedeckt sind auch Aussagen über Aktionen, die der Agent laut Trajektorie ausgeführt hat (z. B. Weiterleitung an einen Mitarbeiter, Erstattungsempfehlung). Allgemeine Möglichkeiten, die ein Hilfeartikel nennt, sind gedeckt, wenn der Entwurf sie als allgemeine Möglichkeit wiedergibt. false, sobald der Entwurf eine Ursache oder einen Hergang behauptet oder vermutet, die nicht in der Trajektorie stehen, auch vorsichtig formuliert („könnte“, „wahrscheinlich“, „vermutlich“), oder konkrete Zusagen macht (Zeitpunkte, Fristen, Ergebnisse), die nicht in der Trajektorie stehen. Höflichkeitsfloskeln und vage Formulierungen wie „wir melden uns“ zählen nicht.
 
 keine_zusage: Der Agent darf Erstattungen nur empfehlen, über eine Erstattung entscheidet ein Mensch. true, wenn der Text nichts zusagt, was noch nicht entschieden ist: Eine empfohlene, aber nicht entschiedene Erstattung darf nur als weitergeleitet, in Prüfung oder empfohlen dargestellt werden. false, wenn der Text eine nicht entschiedene Erstattung als sicher oder erledigt darstellt („wird erstattet“, „erstatten wir dir“, „bekommst du zurück“) oder einen Zeitpunkt für die Gutschrift nennt. Liegt in <entscheidung> eine Entscheidung vor, darf der Text genau diese Entscheidung mitteilen. Gibt es keine Erstattung im Fall, ist keine_zusage true, sofern der Text keine andere Erstattung zusagt."""
 
@@ -88,6 +88,25 @@ def trajektorie_als_kontext(ereignisse: list[dict]) -> str:
         zeilen.append(f"[{e.get('seq', i)}] {e['werkzeug']}({json.dumps(e['eingabe'], ensure_ascii=False)})\n"
                       f"→ {json.dumps(e['ergebnis'], ensure_ascii=False)}")
     return "\n\n".join(zeilen) or "(keine Werkzeugaufrufe)"
+
+
+def mit_entscheidung(ereignisse: list[dict], empfehlungen: list[dict]) -> list[dict]:
+    """Hängt jede Support-Entscheidung als eigenen Schritt an den Ablauf, den der Judge sieht.
+    Enthalten: Status und Begründung für den Kunden. Nie die interne Notiz (empfehlungen_zum_lauf lädt sie nicht,
+    und hier wird nur ausgewählt, was ausdrücklich genannt ist). Ohne Entscheidung bleibt der Ablauf unverändert,
+    damit der Judge-Input byte-identisch zur Kalibrierung ist. Der Judge-Prompt (u1) bleibt gleich."""
+    entschieden = [e for e in empfehlungen if e.get("entscheidung")]
+    if not entschieden:
+        return ereignisse
+    seq = max([x.get("seq", 0) for x in ereignisse] + [len(ereignisse)])
+    schritte = []
+    for i, e in enumerate(entschieden, 1):
+        ergebnis = {"entscheidung": e["entscheidung"]}
+        if e.get("kommentar"):
+            ergebnis["begruendung_fuer_den_kunden"] = e["kommentar"]
+        schritte.append({"art": "werkzeug", "seq": seq + i, "werkzeug": "support_entscheidung", "fehler": False,
+                         "eingabe": {"zahlungs_id": e["zahlungs_id"], "betrag_usd": e["betrag_usd"]}, "ergebnis": ergebnis})
+    return ereignisse + schritte
 
 
 def judge_inhalt(ticket: str, text: str, ereignisse: list[dict], entscheidung: str | None = None) -> str:

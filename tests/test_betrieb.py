@@ -139,14 +139,58 @@ def test_hinweis_nach_entscheidung_statt_entwurf(tmp_path):
     c.__exit__(None, None, None)
 
 
-def test_judge_u2_begruendung_als_beleg():
-    from app import antwort
-    assert pruefung.JUDGE_VERSION == "u2"
-    assert "Begründung für den Kunden, die in <entscheidung> steht" in pruefung.JUDGE_SYSTEM
-    entscheidung = antwort.entscheidungen_als_text([{"betrag_usd": 5.0, "zahlungs_id": "Z1", "entscheidung": "abgelehnt",
-                                                     "kommentar": BEGRUENDUNG}])
-    inhalt = pruefung.judge_inhalt("Ticket", "Antwort", [], entscheidung)
-    assert f"<entscheidung>\nErstattung über" in inhalt and f"Begründung für den Kunden: {BEGRUENDUNG}" in inhalt
+# Mit pruefung.py aus main 0c03b90 (Judge u1, vor der Entscheidung als Schritt) berechnet: sha256(JUDGE_SYSTEM + NUL + judge_inhalt).
+GOLD_ABLAUF = [
+    {"art": "werkzeug", "seq": 1, "werkzeug": "kunde_nachschlagen", "eingabe": {"email": "anna@example.com"},
+     "ergebnis": {"kunden_id": "K001", "name": "Anna Berger"}, "fehler": False},
+    {"art": "text", "seq": 2, "text": "Ich sehe mir die Zahlungen an."},
+    {"art": "werkzeug", "seq": 3, "werkzeug": "zahlungen_ansehen", "eingabe": {"kunden_id": "K001"},
+     "ergebnis": [{"zahlungs_id": "Z005", "betrag_usd": 54.34}], "fehler": False},
+    {"art": "werkzeug", "seq": 4, "werkzeug": "antwort_entwerfen", "eingabe": {"text": "x"}, "ergebnis": {"ok": True}, "fehler": False},
+]
+GOLD_OHNE_ENTSCHEIDUNG = "110038cd05338901d6aba1ea03b9ded0e600287d115d7fb84717a9f07ea9105c"
+GOLD_OFFEN = "79d2db859c39dffd46ecf05cdf92dd47c80ae564922bf3a71ea08829aea459af"
+
+
+def _hash(ablauf, entscheidung):
+    import hashlib
+    return hashlib.sha256((pruefung.JUDGE_SYSTEM + "\x00" + pruefung.judge_inhalt(
+        "Doppelt abgebucht", "Hallo Anna", ablauf, entscheidung)).encode()).hexdigest()
+
+
+def test_judge_input_ohne_entscheidung_byte_identisch():
+    """Läufe ohne Entscheidung: Judge-Input wie bei der Kalibrierung, die Ergebnisse bleiben gültig."""
+    assert pruefung.JUDGE_VERSION == "u1"
+    assert _hash(pruefung.mit_entscheidung(GOLD_ABLAUF, []), None) == GOLD_OHNE_ENTSCHEIDUNG
+    offen = [{"betrag_usd": 54.34, "zahlungs_id": "Z005", "entscheidung": None, "kommentar": None}]
+    assert pruefung.mit_entscheidung(GOLD_ABLAUF, offen) is GOLD_ABLAUF
+    assert _hash(pruefung.mit_entscheidung(GOLD_ABLAUF, offen),
+                 "Erstattung über 54,34 USD für Zahlung Z005: offen. Keine Begründung angegeben.") == GOLD_OFFEN
+
+
+def test_entscheidung_als_schritt_im_judge_ablauf_ohne_notiz(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.pruefung.in_stichprobe", lambda run_id, prozent=20: True)
+    abgaben = []
+    def judge_fn(ticket, text, ereignisse, entscheidung):
+        abgaben.append(ereignisse)
+        return {"keine_spekulation": True, "keine_zusage": True, "modell": "claude-sonnet-5", "kosten_usd": 0.02}
+    c = TestClient(create_app(cfg(tmp_path), query_fn=fake_doppelabbuchung([]), judge_fn=judge_fn))
+    c.__enter__()
+    c.post("/login", data={"code": CODE})
+    run_id = starte(c)
+    sp = c.app.state.speicher
+    eid = sp.offene_empfehlungen()[0]["empfehlungs_id"]
+    c.post(f"/freigaben/{eid}", data={"entscheidung": "abgelehnt", "begruendung": BEGRUENDUNG, "notiz": NOTIZ})
+    warte(lambda: len(sp.pruefungen()) >= 2)
+    ablauf = abgaben[-1]
+    lauf = sp.lauf(run_id)
+    assert ablauf[:-1] == lauf["ereignisse"]                            # Agent-Ablauf unverändert, ein Schritt dazu
+    assert ablauf[-1]["werkzeug"] == "support_entscheidung"
+    assert ablauf[-1]["ergebnis"] == {"entscheidung": "abgelehnt", "begruendung_fuer_den_kunden": BEGRUENDUNG}
+    kontext = pruefung.trajektorie_als_kontext(ablauf)
+    assert "support_entscheidung" in kontext and BEGRUENDUNG in kontext
+    assert "INTERN-7f3a" not in repr(abgaben) and "Kulanzgrenze" not in repr(abgaben)
+    c.__exit__(None, None, None)
 
 
 def test_antwort_faellt_auf_vorlage_zurueck(tmp_path, monkeypatch):
