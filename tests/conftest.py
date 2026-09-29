@@ -8,7 +8,7 @@ def fake_judge(client, ticket, text, ereignisse, entscheidung=None, modell="clau
     AUFRUFE["judge"].append({"text": text, "entscheidung": entscheidung})
     return {"keine_spekulation": "Spekulation" not in text, "keine_spekulation_begruendung": "fake",
             "keine_zusage": "wird erstattet" not in text, "keine_zusage_begruendung": "fake",
-            "judge_version": "u2", "modell": modell, "input_tokens": 1000, "output_tokens": 200, "kosten_usd": 0.02, "dauer_s": 0.01}
+            "judge_version": "u1", "modell": modell, "input_tokens": 1000, "output_tokens": 200, "kosten_usd": 0.02, "dauer_s": 0.01}
 
 
 def fake_antwort(client, lauf, empfehlungen):

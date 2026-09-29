@@ -135,7 +135,8 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
             fehler = judge_erlaubt()
             if fehler is None:
                 try:
-                    urteil = await asyncio.to_thread(judge_fn, lauf["text"], text, lauf["ereignisse"], entscheidung)
+                    ablauf = lauf["ereignisse"] if art == "agent" else pruefung.mit_entscheidung(lauf["ereignisse"], empfehlungen)
+                    urteil = await asyncio.to_thread(judge_fn, lauf["text"], text, ablauf, entscheidung)
                     modell, kosten = urteil.get("modell"), float(urteil.get("kosten_usd", 0))
                 except pruefung.JudgeFehler as e:
                     fehler, kosten = str(e), e.kosten_usd

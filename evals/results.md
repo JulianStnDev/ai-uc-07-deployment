@@ -149,3 +149,23 @@ Abweichungen einzeln:
 Offen ist, ob die Abweichungen bei T06 und T07 an der neuen Regel liegen oder einfach Schwankungen des Modells sind. u1 wurde je Fall nur einmal gemessen.
 
 Kosten UC7 insgesamt: 0,654 + 0,260 = **0,914 USD**.
+
+## Statt u2: Support-Entscheidung als Schritt im Ablauf (2026-09-29)
+
+Lehre aus u2 (**Kopplungseffekt**): Eine Ausnahme im Judge-Prompt wirkt auf alle Fälle, auch auf die ohne Entscheidung. Dadurch verlor u2 in der Kalibrierung 3 von 20 Übereinstimmungen. Deshalb jetzt umgekehrt: Der Prompt bleibt u1. Die Support-Entscheidung kommt als eigener Schritt `support_entscheidung` in den Ablauf, den der Judge sieht, mit Status und Begründung für den Kunden, nie mit der internen Notiz (`pruefung.mit_entscheidung`). Für den Judge ist die Begründung damit eine Quelle wie jeder Werkzeugaufruf. Das Kriterium muss nichts wissen.
+
+Ohne Entscheidung ist der Judge-Input **byte-identisch** zum Stand der Kalibrierung. Ein Test vergleicht den SHA-256 von System-Prompt und Nachricht mit Werten, die mit `pruefung.py` aus `main` (0c03b90) berechnet sind. Die Kalibrierungsergebnisse (20/20) gelten damit weiter, ohne neue Messung.
+
+T03 live, dreimal mit u1 und neuem Ablauf (geschätzt 0,055 USD, gekostet **0,061 USD**, Rohdaten [judge_t03_schritt.jsonl](judge_t03_schritt.jsonl)):
+
+| Wiederholung | Begründung für den Kunden | Laufzeit-Satz | keine_spekulation | keine_zusage |
+|---|---|---|---|---|
+| 1 | gedeckt | als unbelegt erkannt | ✗ | ✓ |
+| 2 | gedeckt | übersehen | ✓ | ✓ |
+| 3 | gedeckt | als unbelegt erkannt | ✗ | ✓ |
+
+Erwartung bestätigt: Die Begründung wird in 3 von 3 Urteilen nicht mehr beanstandet. Nebeneffekt: Da der Judge sich nicht mehr an der Begründung festhält, findet er in 2 von 3 Urteilen den tatsächlich unbelegten Laufzeit-Satz. Das ✗ ist dort das richtige Urteil. Der dritte Durchlauf zeigt, dass der Judge schwankt und unvollständig bleibt.
+
+Deployt als Revision `uc7-00005`, zusammen mit dem Hinweis „Vom Support entschieden am …“.
+
+Kosten UC7 insgesamt: 0,914 + 0,061 = **0,975 USD**.

@@ -125,3 +125,11 @@ Geprüft ohne Live-Lauf: Ein Test schneidet den kompletten Aufruf an die API mit
 ## 2026-09-28: Keine Mindestinstanz trotz Kaltstart
 
 Gemessen (evals/results.md): Eine Seite braucht kalt 2,3 bis 5,5 s (Median 3,4 s), warm 0,03 s. Beim Agent-Lauf erschien der erste Schritt kalt nach 9,8 s statt warm nach 8,1 s. `--min-instances 1` würde diese rund 3 s sparen. Bei Abrechnung pro Instanz (`--no-cpu-throttling`) läuft die Instanz dann aber rund um die Uhr, das kostet deutlich mehr als die ganze Demo. Entscheidung: min. 0 Instanzen bleiben. Der Kaltstart wird in Kauf genommen.
+
+## 2026-09-29: Support-Entscheidung als Schritt im Ablauf des Judges statt Prompt-Ausnahme
+
+Kontext: Der Judge (u1) wertete bei T03 eine vom Mitarbeiter gegebene und korrekt übernommene Begründung als Spekulation, weil sie nicht in der Trajektorie stand.
+
+Verworfen: u2, ein Zusatzsatz im Kriterium („Begründung für den Kunden zählt als Beleg“). In der Kalibrierung sank die Übereinstimmung mit der Handprüfung von 20/20 auf 17/20, auch in Fällen ganz ohne Entscheidung. Die Ausnahme schwappte auf Begründungen des Agents über (Kopplungseffekt).
+
+Entscheidung: Prompt bleibt u1. Die Entscheidung (Status und Begründung für den Kunden, nie die interne Notiz) wird als Schritt `support_entscheidung` an den Ablauf gehängt, den der Judge sieht. Ohne Entscheidung ist der Judge-Input byte-identisch, per Test mit Hash gegen den Stand der Kalibrierung abgesichert, sodass deren Ergebnisse gültig bleiben. T03 dreimal: Begründung 3/3 als gedeckt gewertet (evals/results.md).
