@@ -96,3 +96,31 @@ Die Stichprobe ist klein. Das ist ein Betriebsnachweis, keine Qualitätsaussage 
 | **Summe** | **0,445** |
 
 UC7 insgesamt bisher: Kontrollläufe (a)/(b) 0,160 + Branch (c) 0,445 = **0,605 USD**.
+
+## Kontrolllauf: Begründung für den Kunden und interne Notiz (2026-09-29)
+
+T03 „Jahresabo zurückgeben“ (Clara, `20260929-045000-656c12`) über die öffentliche URL, Revision `uc7-00004`. Abgelehnt in der Konsole, beide Felder ausgefüllt. Geschätzt waren 0,035 bis 0,055 USD (ca. 0,04 USD ohne Judge).
+
+- Begründung für den Kunden: „Du hast die Pro-Funktionen nach dem Kauf schon intensiv genutzt, deshalb fällt das Jahresabo nicht unter die Rückgabe innerhalb von 14 Tagen.“
+- Interne Notiz: „INTERN-T03 Testablehnung, laut Richtlinie eigentlich erstattbar, Kulanzgrenze nicht erreicht“
+
+Endgültige Antwort (Haiku 4.5), Kern: „Leider können wir dir in diesem Fall keine Erstattung gewähren, da du die Pro-Funktionen nach dem Kauf bereits intensiv genutzt hast.“ Screenshots: [Antwort](../docs/screenshots/betrieb/5-antwort-begruendung.png), [Konsole mit Notiz](../docs/screenshots/betrieb/5-konsole-notiz.png).
+
+| Prüfung | Ergebnis |
+|---|---|
+| Begründung sinngemäß in der Antwort | ✓ Grund übernommen. Den Bezug auf die 14-Tage-Rückgabe hat Haiku weggelassen. Bei T03 am 28.09. war der Kommentar noch gar nicht übernommen worden |
+| Notiz in der Kundensicht / auf der ganzen Laufseite / im Antwort-Fragment `/lauf/{id}/antwort` | ✓ nirgends (Suche nach „INTERN-T03“ und „Kulanzgrenze“) |
+| Notiz im Antwort-Protokoll (`antworten.entscheidungen`) | ✓ nicht enthalten |
+| Notiz in der Konsole | ✓ sichtbar, wie vorgesehen |
+| Regelprüfungen | 5 von 5 |
+| Judge (Lauf fiel in die Stichprobe) | keine Zusage ✓, **keine Spekulation ✗** |
+
+Befund zum Judge: Er wertete die übernommene Begründung als Spekulation, weil die intensive Nutzung „in der Trajektorie nirgends belegt“ ist. Die Begründung stammt aber vom Mitarbeiter und steht im Judge-Kontext unter `<entscheidung>`. Das Kriterium u1 zählt nur die Werkzeugaufrufe als Beleg. Für endgültige Antworten ist es damit zu eng. Das ist ein Messfehler, kein Fehler der Antwort. Vorschlag für u2: Die Begründung für den Kunden gilt als belegte Quelle. Nicht umgesetzt, weil nur der Kontrolllauf beauftragt war.
+
+Nicht vom Judge beanstandet, aber auffällig: „Dann endet dein Pro-Zugang zum Ende der aktuellen Laufzeit“ steht so in keinem abgerufenen Hilfeartikel. Dort geht es um das Ablaufen der Laufzeit nur beim Zusammenführen von Konten. Das ist grenzwertig.
+
+Nebenbefund Oberfläche: Über der endgültigen Antwort steht weiter der Hinweis „Entwurf. Wird vor dem Versand von einem Menschen geprüft.“ Nach der Freigabe stimmt das nicht mehr.
+
+Kosten: Agent 0,0260 + Antwort 0,0044 + Judge 0,0190 = **0,049 USD**. Das liegt etwas über den ca. 0,04 USD, weil der Lauf in die 20-%-Stichprobe fiel. UC7 insgesamt: 0,605 + 0,049 = **0,654 USD**.
+
+Betriebszahlen September danach: 8 Läufe, 0 Fehler, Median 20,0 s, p95 39,7 s, Gesamtkosten 0,273 USD, also **34,1 USD je 1000**. Judge: keine Spekulation 3/4, keine Zusage 4/4.
