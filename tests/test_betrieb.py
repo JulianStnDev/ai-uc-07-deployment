@@ -1,6 +1,7 @@
 """Branch (c) ohne LLM: Variante A (endgültige Antwort nach Freigabe), Judge-Stichprobe und Deckel,
 Regelprüfungen, Budget inkl. Prüf- und Antwortkosten, Betriebsseite."""
 
+import re
 from datetime import datetime, timezone
 
 import pytest
@@ -333,6 +334,8 @@ def test_betriebsseite_kennzahlen_und_hinweise(tmp_path):
     html = c.get("/betrieb").text
     assert "Läufe im Monat" in html and "Fehlerquote" in html and html.count('class="saeule"') == 14
     assert "Als Tabelle" in html and 'tabindex="0"' in html
+    inhalt = html[html.index("<main"):]                      # deutsche Seite, deutsche Formate (Navigation ist englisch)
+    assert "von 4,50 USD" in inhalt and "0,0310 USD" in inhalt and not re.search(r"\d\.\d\d USD", inhalt)
     assert {"budget", "kosten", "fehlerquote", "pruefung", "spekulation", "zusage"} <= pruefe_infos(html)
     assert '<a href="/betrieb" aria-current="page">Betrieb</a>' in html
     c.__exit__(None, None, None)

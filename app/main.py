@@ -188,6 +188,7 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
     app.mount("/static", StaticFiles(directory=HIER / "static"), name="static")
     templates = Jinja2Templates(directory=HIER / "templates")
     templates.env.filters.update(usd=darstellung.usd, usd_genau=darstellung.usd_genau, datum=darstellung.datum,
+                                 usd_de=darstellung.usd_de, datum_de=darstellung.datum_de,
                                  abo=darstellung.abo_text)
     templates.env.globals.update(info=hinweise.info)
 
