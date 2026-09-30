@@ -1,5 +1,5 @@
 {
-  "title": "Deployment: Support-Agent als Web-Demo",
+  "title": "Deployment: The Support Agent as a Web Demo",
   "status": "done",
   "tags": [
     "deployment",
@@ -9,5 +9,14 @@
     "monitoring",
     "llm-judge"
   ],
-  "summary": "UC4-Support-Agent als Web-Demo auf Cloud Run: Zugangscode, Live-Anzeige per SSE, Freigabe durch Menschen vor jeder Erstattungsantwort, Stichproben-Judge, Betriebsseite und hartes Monatsbudget von 5 USD"
+  "summary": "The UC4 support agent deployed on Cloud Run with a live view of its tool calls, human approval before every refund answer and a hard monthly budget.",
+  "metrics": [
+    "34.1 USD per 1000 requests",
+    "p95 latency 39.7 s (n = 8)"
+  ],
+  "demo": {
+    "url": "https://uc7-807149335205.europe-west3.run.app",
+    "note": "access code on request"
+  },
+  "screenshot": "docs/screenshots/betrieb/5-konsole-notiz.png"
 }
