@@ -121,12 +121,15 @@ def sse_ereignisse(client, run_id, headers=None):
 
 # ---------- Zugang ----------
 
-def test_ohne_code_alles_gesperrt_ausser_login_health_static(tmp_path):
+def test_ohne_code_nur_replay_login_health_static(tmp_path):
     with TestClient(create_app(cfg(tmp_path))) as c:
-        for pfad in ["/", "/freigaben", "/lauf/20260928-120000-abcdef"]:
+        for pfad in ["/anliegen", "/freigaben", "/lauf/20260928-120000-abcdef", "/betrieb", "/diagnose"]:
             r = c.get(pfad, follow_redirects=False)
-            assert r.status_code == 303 and r.headers["location"] == "/login"
-        assert c.post("/lauf", data={"kunden_id": "K001", "text": "x"}, follow_redirects=False).status_code == 303
+            assert r.status_code == 303 and r.headers["location"] == "/"   # zurück zum Replay
+        r = c.post("/lauf", data={"kunden_id": "K001", "text": "x"}, follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"] == "/"
+        assert c.app.state.speicher.db.execute("SELECT COUNT(*) FROM laeufe").fetchone()[0] == 0
+        assert "Recording of a real run" in c.get("/", follow_redirects=False).text
         assert c.get("/login").status_code == 200
         assert c.get("/health").json() == {"ok": True}
         assert c.get("/static/htmx.min.js").status_code == 200
@@ -135,18 +138,19 @@ def test_ohne_code_alles_gesperrt_ausser_login_health_static(tmp_path):
 def test_falscher_code_abgelehnt_richtiger_setzt_cookie(tmp_path):
     with TestClient(create_app(cfg(tmp_path))) as c:
         r = c.post("/login", data={"code": "falsch"}, follow_redirects=False)
-        assert r.status_code == 401 and "stimmt nicht" in r.text
+        assert r.status_code == 401 and "not correct" in r.text
         r = c.post("/login", data={"code": CODE}, follow_redirects=False)
         assert r.status_code == 303
         assert CODE not in r.headers["set-cookie"]  # im Cookie steht nur eine Signatur
         assert "httponly" in r.headers["set-cookie"].lower()
-        assert c.get("/", follow_redirects=False).status_code == 200
+        assert "How this demo works" in c.get("/", follow_redirects=False).text
 
 
 def test_gefaelschtes_cookie_hilft_nicht(tmp_path):
     with TestClient(create_app(cfg(tmp_path))) as c:
         c.cookies.set("uc7_zugang", "a" * 64)
-        assert c.get("/", follow_redirects=False).status_code == 303
+        assert c.get("/freigaben", follow_redirects=False).status_code == 303
+        assert "Recording of a real run" in c.get("/").text
 
 
 def test_app_startet_nicht_ohne_zugangscode(monkeypatch):
@@ -161,10 +165,10 @@ def test_app_startet_nicht_ohne_zugangscode(monkeypatch):
 # ---------- Ticket-Eingabe ----------
 
 @pytest.mark.parametrize("kunden_id, text, stichwort", [
-    ("K999", "Hallo", "Kunden"),
-    ("", "Hallo", "Kunden"),
-    ("K001", "   ", "Anliegen"),
-    ("K001", "x" * 1001, "zu lang"),
+    ("K999", "Hallo", "choose a customer"),
+    ("", "Hallo", "choose a customer"),
+    ("K001", "   ", "write a request"),
+    ("K001", "x" * 1001, "too long"),
 ])
 def test_ungueltige_eingaben_starten_keinen_lauf(client, aufrufe, kunden_id, text, stichwort):
     r = client.post("/lauf", data={"kunden_id": kunden_id, "text": text})
@@ -215,13 +219,13 @@ def test_sse_liefert_schritte_ergebnis_und_ende(client):
     warte_bis_fertig(client, run_id)
     ev = sse_ereignisse(client, run_id)
     assert [e["event"] for e in ev] == ["schritt"] * 5 + ["status", "entwurf", "abschluss", "ende"]
-    assert "Ich schaue mir das Konto an." in ev[0]["data"] and "Notiz des Agents" in ev[0]["data"]
-    assert "Sucht das Kundenkonto" in ev[1]["data"] and "Konto gefunden: Anna Berger" in ev[1]["data"]
-    assert "54,34 USD" in ev[3]["data"] and "wartet auf Freigabe" in ev[3]["data"]
-    assert "fertig" in ev[5]["data"]
-    assert "Erstattung in Prüfung" in ev[6]["data"] and "Hallo Anna" in ev[6]["data"]  # Variante A: Zwischenbescheid
+    assert "Ich schaue mir das Konto an." in ev[0]["data"] and "Agent&#39;s note" in ev[0]["data"]
+    assert "Looks up the customer account" in ev[1]["data"] and "Account found: Anna Berger" in ev[1]["data"]
+    assert "54.34 USD" in ev[3]["data"] and "awaiting approval" in ev[3]["data"]
+    assert "done" in ev[5]["data"]
+    assert "Refund under review" in ev[6]["data"] and "Hallo Anna" in ev[6]["data"]  # Variante A: Zwischenbescheid
     assert "zur Erstattung weitergeleitet" not in ev[6]["data"]                                  # Agent-Entwurf nicht beim Kunden
-    assert "Fertig" in ev[7]["data"] and "0,03 USD" in ev[7]["data"] and "zur Support-Konsole" in ev[7]["data"]
+    assert "Done" in ev[7]["data"] and "0.03 USD" in ev[7]["data"] and "to the support console" in ev[7]["data"]
     # Alle drei Abschluss-Teile tragen die ID des Ergebnis-Ereignisses (5)
     assert [e.get("id") for e in ev[:8]] == [0, 1, 2, 3, 4, 5, 5, 5]
 
@@ -256,7 +260,7 @@ def test_fehler_im_lauf_wird_pauschal_verbucht(tmp_path):
         assert lauf["kosten_usd"] == agent.MAX_BUDGET_USD and lauf["kosten_pauschal"] == 1
         assert "ConnectionError" in lauf["ergebnis"]["fehlertext"]
         assert lauf["ergebnis"]["pflichten_offen"] == ["antwort_entwerfen"]
-        assert "Pauschale" in c.get(f"/lauf/{lauf['run_id']}").text
+        assert "flat rate" in c.get(f"/lauf/{lauf['run_id']}").text
 
 
 def test_ohne_api_key_wird_lauf_zum_fehler(tmp_path, monkeypatch):
@@ -271,7 +275,7 @@ def test_ohne_api_key_wird_lauf_zum_fehler(tmp_path, monkeypatch):
 def test_nur_ein_lauf_gleichzeitig(client):
     client.app.state.speicher.lauf_anlegen("20260928-000000-aaaaaa", "K001", "a@example.com", "läuft noch", status="laeuft")
     r = client.post("/lauf", data={"kunden_id": "K002", "text": "Hallo"})
-    assert r.status_code == 429 and "anderes Anliegen" in r.text
+    assert r.status_code == 429 and "another request" in r.text
 
 
 def test_verwaiste_laeufe_beim_start_pauschal_verbucht(tmp_path):
@@ -296,12 +300,12 @@ def test_freigabe_bestaetigen_nur_einmal(client):
     warte_bis_fertig(client, starte(client))
     eid = client.app.state.speicher.offene_empfehlungen()[0]["empfehlungs_id"]
     r = client.get("/freigaben")
-    assert "Echte Doppelabbuchung" in r.text and "Z005" in r.text and 'class="badge offen">offen<' in r.text
+    assert "Echte Doppelabbuchung" in r.text and "Z005" in r.text and 'class="badge offen">open<' in r.text
     r = client.post(f"/freigaben/{eid}", data={"entscheidung": "bestaetigt", "begruendung": " passt "})
-    assert "Entscheidung gespeichert" in r.text and "Keine offenen Empfehlungen" in r.text
-    assert 'class="badge bestaetigt">bestätigt<' in r.text and "100 %" in r.text
+    assert "Decision saved" in r.text and "No open recommendations" in r.text
+    assert 'class="badge bestaetigt">confirmed<' in r.text and "100 %" in r.text
     r = client.post(f"/freigaben/{eid}", data={"entscheidung": "abgelehnt"})
-    assert "schon entschieden" in r.text
+    assert "already been decided" in r.text
     s = client.app.state.speicher
     assert s.entschiedene_empfehlungen()[0]["entscheidung"] == "bestaetigt"
     assert s.entschiedene_empfehlungen()[0]["kommentar"] == "passt"
@@ -311,8 +315,8 @@ def test_freigabe_bestaetigen_nur_einmal(client):
 def test_freigabe_ungueltig_und_unbekannt(client):
     warte_bis_fertig(client, starte(client))
     eid = client.app.state.speicher.offene_empfehlungen()[0]["empfehlungs_id"]
-    assert "Bitte „Bestätigen“ oder „Ablehnen“ wählen" in client.post(f"/freigaben/{eid}", data={"entscheidung": "vielleicht"}).text
-    assert "schon entschieden" in client.post("/freigaben/E-gibtsnicht", data={"entscheidung": "abgelehnt"}).text
+    assert "Please choose “Confirm” or “Reject”" in client.post(f"/freigaben/{eid}", data={"entscheidung": "vielleicht"}).text
+    assert "does not exist" in client.post("/freigaben/E-gibtsnicht", data={"entscheidung": "abgelehnt"}).text
     assert len(client.app.state.speicher.offene_empfehlungen()) == 1
 
 
@@ -328,10 +332,10 @@ def lauf_mit_kosten(speicher, run_id, kosten, erstellt=None, status="fertig"):
 def test_budget_gesperrt_zeigt_abschaltmeldung(client, aufrufe):
     lauf_mit_kosten(client.app.state.speicher, "20260928-000000-000001", 4.50)
     r = client.get("/anliegen")
-    assert "macht Pause" in r.text and "01." in r.text and "<textarea" not in r.text
-    assert "Demo-Budget für diesen Monat ist aufgebraucht" in client.get("/").text
+    assert "taking a break" in r.text and "1 " in r.text and "<textarea" not in r.text
+    assert "demo budget for this month is used up" in client.get("/").text
     r = client.post("/lauf", data={"kunden_id": "K001", "text": "Hallo"})
-    assert r.status_code == 503 and "macht Pause" in r.text
+    assert r.status_code == 503 and "taking a break" in r.text
     assert aufrufe == []
 
 
@@ -356,7 +360,7 @@ def test_deckel_plus_reserve_bleibt_unter_5_usd():
     assert 4.50 + budget.RESERVE_JE_LAUF_USD <= 5.00
 
 
-@pytest.mark.parametrize("monat, erwartet", [("2026-09", "01.10.2026"), ("2026-12", "01.01.2027")])
+@pytest.mark.parametrize("monat, erwartet", [("2026-09", "1 Oct 2026"), ("2026-12", "1 Jan 2027")])
 def test_naechster_monat(monat, erwartet):
     assert budget.BudgetStand(monat, 0, 0, 4.5).naechster_monat == erwartet
 
@@ -368,9 +372,11 @@ def test_sse_format_mehrzeilig():
     assert darstellung.sse_nachricht("ende", "") == "event: ende\ndata: \n\n"
 
 
-def test_usd_deutsch():
-    assert darstellung.usd(1234.5) == "1.234,50 USD"
-    assert darstellung.usd_genau(0.0312) == "0,0312 USD"
+def test_usd_und_datum_englisch():
+    assert darstellung.usd(1234.5) == "1,234.50 USD"
+    assert darstellung.usd_genau(0.0312) == "0.0312 USD"
+    assert darstellung.datum("2026-09-28T19:09:01+00:00") == "28 Sep 2026, 19:09"
+    assert darstellung.datum("2026-01-05") == "5 Jan 2026"
 
 
 def test_diagnose_startet_cli_ohne_api_und_nur_mit_zugang(client, tmp_path):
@@ -404,8 +410,8 @@ def test_belegter_platz_wartet_und_verfaellt_ohne_kosten(tmp_path, aufrufe):
         run_id = lege_an(c)
         c.portal.call(app.state.agent_platz.acquire)  # anderer Lauf belegt den Platz dieser Instanz
         ev = sse_ereignisse(c, run_id)
-        assert "Wartet auf einen freien Platz" in ev[0]["data"]
-        assert "Gerade ist viel los" in "".join(e.get("data", "") for e in ev) and "nicht gestartet" in "".join(e.get("data", "") for e in ev)
+        assert "Waiting for a free slot" in ev[0]["data"]
+        assert "busy right now" in "".join(e.get("data", "") for e in ev) and "not started" in "".join(e.get("data", "") for e in ev)
         lauf = c.app.state.speicher.lauf(run_id)
         assert lauf["status"] == "verfallen" and lauf["kosten_usd"] == 0 and aufrufe == []
 
@@ -419,7 +425,7 @@ def test_wartet_bis_platz_frei_und_startet_dann(tmp_path, aufrufe):
         c.portal.call(app.state.agent_platz.acquire)
         threading.Timer(0.3, lambda: c.portal.call(app.state.agent_platz.release)).start()
         ev = sse_ereignisse(c, run_id)
-        assert "Wartet auf einen freien Platz" in ev[0]["data"] and ev[-1]["event"] == "ende"
+        assert "Waiting for a free slot" in ev[0]["data"] and ev[-1]["event"] == "ende"
         assert c.app.state.speicher.lauf(run_id)["status"] == "fertig" and len(aufrufe) == 1
         assert not app.state.agent_platz.locked()  # nach dem Lauf wieder frei
 

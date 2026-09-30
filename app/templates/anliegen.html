@@ -1,51 +1,51 @@
 {% extends "base.html" %}
-{% block titel %}Anliegen stellen{% endblock %}
+{% block titel %}New request{% endblock %}
 {% block inhalt %}
-<div class="kopfzeile-seite"><div><p class="ueberzeile">Anliegen stellen</p><h1>Wie können wir helfen?</h1></div></div>
+<div class="kopfzeile-seite"><div><p class="ueberzeile">New request</p><h1>How can we help?</h1></div></div>
 {% if fehler %}<p class="meldung fehler" role="alert">{{ fehler }}</p>{% endif %}
 <div class="geteilt">
   <section class="karte portal" aria-labelledby="portal-titel">
-    <div class="spalte-kopf"><h2 class="ueberzeile" id="portal-titel">Kundenportal</h2><span class="sehr-leise">so sieht es der Kunde</span></div>
+    <div class="spalte-kopf"><h2 class="ueberzeile" id="portal-titel">Customer portal</h2><span class="sehr-leise">what the customer sees</span></div>
     {% if budget.gesperrt %}
     <div class="leer-zustand">
       <div class="gross" aria-hidden="true">☕</div>
-      <p><strong>Der Agent macht Pause.</strong></p>
-      <p style="margin-top: 6px;">Danke fürs Ausprobieren! Das Demo-Budget für diesen Monat ist aufgebraucht
-        ({{ budget.belegt_usd | usd }} von {{ budget.deckel_usd | usd }}). Neue Anliegen gehen ab dem
-        <strong>{{ budget.naechster_monat }}</strong> wieder.</p>
-      <p style="margin-top: 12px;"><a href="/freigaben">Zur Support-Konsole</a></p>
+      <p><strong>The agent is taking a break.</strong></p>
+      <p style="margin-top: 6px;">Thanks for trying it out! The demo budget for this month is used up
+        ({{ budget.belegt_usd | usd }} of {{ budget.deckel_usd | usd }}). New requests are possible again from
+        <strong>{{ budget.naechster_monat }}</strong>.</p>
+      <p style="margin-top: 12px;"><a href="/freigaben">To the support console</a> · <a href="/replay">Watch a recorded run</a></p>
     </div>
     {% else %}
-    {% if laeuft_gerade %}<p class="meldung" role="status">Gerade bearbeitet der Agent ein anderes Anliegen.</p>{% endif %}
+    {% if laeuft_gerade %}<p class="meldung" role="status">The agent is working on another request right now.</p>{% endif %}
     <form method="post" action="/lauf">
       <input type="hidden" name="beispiel" id="beispiel" value="{{ beispiel }}">
-      <div class="feld"><div class="feld-kopf"><label for="kunden_id">Du schreibst als</label>{{ info("absender", "Absender") }}</div>
+      <div class="feld"><div class="feld-kopf"><label for="kunden_id">You write as</label>{{ info("absender", "Sender") }}</div>
         <select id="kunden_id" name="kunden_id" required>
-          <option value="">Bitte einen Kunden wählen …</option>
+          <option value="">Choose a customer …</option>
           {% for k in kunden.values() %}
           <option value="{{ k.kunden_id }}" {% if k.kunden_id == kunden_id %}selected{% endif %}>{{ k.name }} · {{ k.email }} · {{ k | abo }}</option>
           {% endfor %}
         </select></div>
-      <div class="feld"><span class="feld-titel" id="beispiele-titel">Beispiele zum Ausprobieren</span>
+      <div class="feld"><span class="feld-titel" id="beispiele-titel">Examples to try (German texts)</span>
         <div class="chips" role="group" aria-labelledby="beispiele-titel">
           {% for b in beispiele %}
           <button type="button" class="chip" data-beispiel="{{ b.id }}" data-kunde="{{ b.kunden_id }}" data-text="{{ b.text }}"
-                  title="als {{ kunden[b.kunden_id].name }}">{{ b.label }}</button>
+                  title="as {{ kunden[b.kunden_id].name }}">{{ b.label }}</button>
           {% endfor %}
         </div></div>
-      <div class="feld"><label for="text">Dein Anliegen</label>
-        <textarea id="text" name="text" maxlength="{{ max_zeichen }}" required placeholder="Beschreibe kurz, worum es geht …">{{ text }}</textarea>
-        <div class="feld-hinweis"><span>Höchstens {{ max_zeichen }} Zeichen</span><span><span id="zaehler">{{ text | length }}</span> / {{ max_zeichen }}</span></div></div>
-      <button type="submit" class="knopf breit">Anliegen senden</button>
-      <p class="sehr-leise" style="margin-top: 12px; text-align: center;">Dauert etwa 30 Sekunden und kostet rund 3 Cent.</p>
+      <div class="feld"><label for="text">Your request</label>
+        <textarea id="text" name="text" maxlength="{{ max_zeichen }}" required placeholder="Briefly describe the issue (German or English) …">{{ text }}</textarea>
+        <div class="feld-hinweis"><span>At most {{ max_zeichen }} characters</span><span><span id="zaehler">{{ text | length }}</span> / {{ max_zeichen }}</span></div></div>
+      <button type="submit" class="knopf breit">Send request</button>
+      <p class="sehr-leise" style="margin-top: 12px; text-align: center;">Takes about 30 seconds and costs around 3 cents.{% if link %} Uses 1 of your {{ uebrig }} remaining live runs.{% endif %}</p>
     </form>
     {% endif %}
   </section>
   <section class="karte kulisse" aria-labelledby="kulisse-titel">
-    <div class="spalte-kopf"><h2 class="ueberzeile" id="kulisse-titel">Hinter den Kulissen</h2>{{ info("werkzeug", "Schritte des Agents", true) }}</div>
+    <div class="spalte-kopf"><h2 class="ueberzeile" id="kulisse-titel">Behind the scenes</h2>{{ info("werkzeug", "The agent's steps", true) }}</div>
     <div class="leer-zustand"><div class="gross" aria-hidden="true">🔍</div>
-      <p><strong>Hier siehst du gleich, was der Agent tut.</strong></p>
-      <p style="margin-top: 6px;">Jeder Schritt erscheint live: welches Konto er prüft, welche Regeln er liest und was er am Ende vorschlägt.</p></div>
+      <p><strong>This is where you'll see what the agent does.</strong></p>
+      <p style="margin-top: 6px;">Every step appears live: which account it checks, which rules it reads and what it suggests in the end.</p></div>
   </section>
 </div>
 <script>

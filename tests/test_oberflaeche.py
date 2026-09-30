@@ -55,7 +55,7 @@ def pruefe_infos(html: str) -> set[str]:
     for k in p.knoepfe:
         assert k["type"] == "button"                                # per Tastatur erreichbar, sendet kein Formular
         assert k["aria-expanded"] == "false"                        # Zustand für Screenreader
-        assert k["aria-label"].startswith("Erklärung: ")            # verständlicher Name statt nur "i"
+        assert k["aria-label"].startswith("Explanation: ")            # verständlicher Name statt nur "i"
         assert not k["in_label"], "Info-Knopf darf nicht im <label> stecken (sonst Teil des Feldnamens)"
         text = p.texte[k["aria-controls"]]                          # Knopf zeigt auf existierenden Text
         assert text["role"] == "note" and "hidden" in text
@@ -89,7 +89,7 @@ def test_infotexte_kurz_und_einfach(schluessel):
 
 def test_info_markup_und_escaping():
     html = str(hinweise.info("budget", 'Budget "<b>"'))
-    assert 'aria-label="Erklärung: Budget &#34;&lt;b&gt;&#34;"' in html
+    assert 'aria-label="Explanation: Budget &#34;&lt;b&gt;&#34;"' in html
     assert pruefe_infos(html) == {"budget"}
 
 
@@ -130,13 +130,13 @@ def test_laufseite_und_live_fragmente_haben_gueltige_hinweise(client):
 def test_konsole_zeigt_status_badges_und_quote(client):
     warte_bis_fertig(client, starte(client))
     html = client.get("/freigaben").text
-    assert 'class="badge offen">offen<' in html and "0 von 0 bestätigt" in html
+    assert 'class="badge offen">open<' in html and "0 of 0 confirmed" in html
 
 
 # ---------- Titel ----------
 
 def test_titel_ist_chip_label_wenn_text_unveraendert():
-    assert hinweise.titel_fuer(BEISPIEL_TEXTE["T01"], "T01", BEISPIEL_TEXTE) == "Doppelt abgebucht beim Jahresabo"
+    assert hinweise.titel_fuer(BEISPIEL_TEXTE["T01"], "T01", BEISPIEL_TEXTE) == "Charged twice for annual plan"
 
 
 def test_titel_aus_ersten_worten_wenn_text_geaendert():
@@ -152,13 +152,13 @@ def test_titel_kurz_ohne_beispiel_gross_geschrieben():
 def test_titel_wird_beim_lauf_gespeichert(client):
     run_id = starte(client, kunden_id="K001", text=BEISPIEL_TEXTE["T01"], beispiel="T01")
     warte_bis_fertig(client, run_id)
-    assert client.app.state.speicher.lauf(run_id)["titel"] == "Doppelt abgebucht beim Jahresabo"
-    assert "<h1>Doppelt abgebucht beim Jahresabo</h1>" in client.get(f"/lauf/{run_id}").text
+    assert client.app.state.speicher.lauf(run_id)["titel"] == "Charged twice for annual plan"
+    assert "<h1>Charged twice for annual plan</h1>" in client.get(f"/lauf/{run_id}").text
 
 
 def test_chips_fuer_alle_15_beispiele(client):
     html = client.get("/anliegen").text
-    assert html.count('class="chip"') == 15 and 'data-beispiel="T12"' in html and "Was kostet Pro?" in html
+    assert html.count('class="chip"') == 15 and 'data-beispiel="T12"' in html and "How much is Pro?" in html
 
 
 # ---------- Zeitleiste: nur was der Agent gesehen hat ----------
@@ -168,27 +168,27 @@ def test_zahlungen_neutral_ohne_hervorhebung(tmp_path):
     erg, fehler = k.aufrufen("zahlungen_ansehen", {"kunden_id": "K001"})
     s = darstellung.schritt({"art": "werkzeug", "werkzeug": "zahlungen_ansehen", "eingabe": {"kunden_id": "K001"},
                              "ergebnis": erg, "fehler": fehler})
-    assert s["titel"] == "Sieht die Zahlungen an" and s["text"] == "5 Zahlungen gefunden"
-    assert len(s["liste"]) == 5 and s["liste"][3] == "14.09.2026 · 54,34 USD · Wechsel auf FocusFlow Pro jährlich (59,00 USD abzgl. 4,66 USD Guthaben) (Z004)"
+    assert s["titel"] == "Checks the payments" and s["text"] == "5 payments found"
+    assert len(s["liste"]) == 5 and s["liste"][3] == "14 Sep 2026 · 54.34 USD · Wechsel auf FocusFlow Pro jährlich (59,00 USD abzgl. 4,66 USD Guthaben) (Z004)"
     alles = " ".join([s["text"], *s["liste"]]).lower()
-    assert not any(w in alles for w in ("doppel", "zweimal", "darunter", "verdächtig"))
+    assert not any(w in alles for w in ("doppel", "zweimal", "darunter", "verdächtig", "double", "twice", "including", "suspicious"))
 
 
 def test_hilfe_und_kunde_in_alltagssprache(tmp_path):
     k = Werkzeugkasten(run_id="h", runs_dir=tmp_path)
     erg, _ = k.aufrufen("kunde_nachschlagen", {"suche": "Felix"})
     s = darstellung.schritt({"art": "werkzeug", "werkzeug": "kunde_nachschlagen", "eingabe": {"suche": "Felix"}, "ergebnis": erg, "fehler": False})
-    assert s["text"] == "2 Konten gefunden" and len(s["liste"]) == 2
+    assert s["text"] == "2 accounts found" and len(s["liste"]) == 2
     erg, _ = k.aufrufen("kunde_nachschlagen", {"suche": "K008"})
     s = darstellung.schritt({"art": "werkzeug", "werkzeug": "kunde_nachschlagen", "eingabe": {}, "ergebnis": erg, "fehler": False})
-    assert s["text"] == "Konto gefunden: Greta Koch · Free"
+    assert s["text"] == "Account found: Greta Koch · Free"
 
 
 def test_blockierter_aufruf_und_fehler_verstaendlich():
     s = darstellung.schritt({"art": "werkzeug", "werkzeug": "Bash", "eingabe": {}, "ergebnis": {"fehler": "x"}, "fehler": True, "blockiert": True})
-    assert s["klasse"] == "fehler" and s["info"] == "blockiert" and "nicht freigegeben" in s["text"]
+    assert s["klasse"] == "fehler" and s["info"] == "blockiert" and "not permitted" in s["text"]
     s = darstellung.schritt({"art": "werkzeug", "werkzeug": "zahlungen_ansehen", "eingabe": {}, "ergebnis": {"fehler": "Kunde 'K999' nicht gefunden."}, "fehler": True})
-    assert s["text"] == "Hat nicht geklappt: Kunde 'K999' nicht gefunden."
+    assert s["text"] == "Didn't work: Kunde 'K999' nicht gefunden."
 
 
 def test_notiz_ohne_markdown():
@@ -215,9 +215,9 @@ def test_uebergabe_erscheint_in_konsole_und_lauf(tmp_path):
         warte_bis_fertig(c, run_id)
         konsole = c.get("/freigaben").text
         assert "Im Konto nur eine Zahlung sichtbar." in konsole and f'/lauf/{run_id}' in konsole
-        assert "Keine offenen Empfehlungen" in konsole
+        assert "No open recommendations" in konsole
         lauf = c.get(f"/lauf/{run_id}").text
-        assert "Übergibt an einen Menschen" in lauf and "An einen Menschen übergeben" in lauf
+        assert "Hands over to a human" in lauf and "Handed over to a human" in lauf
 
 
 # ---------- Migration ----------

@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% block titel %}Anmelden{% endblock %}
+{% block titel %}Sign in{% endblock %}
 {% block navigation %}{% endblock %}
 {% block seitenklasse %} schmal{% endblock %}
 {% block inhalt %}
 <section class="karte" style="max-width: 420px; margin: 48px auto;">
-  <p class="ueberzeile">Nicht öffentliche Demo</p>
-  <h1 style="margin: 6px 0 12px;">Zugangscode</h1>
-  <p class="leise" style="margin-bottom: 20px;">Bitte gib den Zugangscode ein, den du bekommen hast.</p>
+  <p class="ueberzeile">Admin access</p>
+  <h1 style="margin: 6px 0 12px;">Access code</h1>
+  <p class="leise" style="margin-bottom: 20px;">Got a personal link? Just open it, no code needed. Or <a href="/">watch a recorded run</a>.</p>
   {% if fehler %}<p class="meldung fehler" role="alert">{{ fehler }}</p>{% endif %}
   <form method="post" action="/login">
     <div class="feld"><label for="code">Code</label>
       <input id="code" name="code" type="password" autocomplete="current-password" required autofocus></div>
-    <button type="submit" class="knopf breit">Weiter</button>
+    <button type="submit" class="knopf breit">Continue</button>
   </form>
 </section>
 {% endblock %}

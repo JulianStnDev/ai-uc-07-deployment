@@ -3,5 +3,5 @@
   {% if s.notiz %}<div class="gedanke">„{{ s.text }}“</div>
   {% else %}<div class="ereignis-text">{{ s.text }}{% if s.badge %} <span class="badge {{ s.badge[0] }}">{{ s.badge[1] }}</span>{% endif %}
     {% if s.liste %}<ul>{% for z in s.liste %}<li>{{ z }}</li>{% endfor %}</ul>{% endif %}</div>{% endif %}
-  {% if s.roh %}<details class="roh"><summary>Rohdaten</summary><pre>{{ s.roh }}</pre></details>{% endif %}
+  {% if s.roh %}<details class="roh"><summary>Raw data</summary><pre>{{ s.roh }}</pre></details>{% endif %}
 </li>

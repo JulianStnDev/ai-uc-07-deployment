@@ -1,34 +1,45 @@
 <!doctype html>
-<html lang="de">
+<html lang="{% block sprache %}en{% endblock %}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block titel %}Support-Demo{% endblock %} · FocusFlow Support-Demo</title>
+  <meta name="robots" content="noindex">
+  <title>{% block titel %}Support demo{% endblock %} · FocusFlow Support Demo</title>
   <link rel="stylesheet" href="/static/portal.css">
   <script src="/static/htmx.min.js"></script>
   <script src="/static/htmx-sse.js"></script>
 </head>
 <body>
   <header class="kopf"><div class="kopf-innen">
-    <a class="logo" href="/"><span class="logo-zeichen" aria-hidden="true">F</span>FocusFlow <small>Support-Demo</small></a>
+    <a class="logo" href="/"><span class="logo-zeichen" aria-hidden="true">F</span>FocusFlow <small>Support demo</small></a>
     {% block navigation %}
-    <nav class="navi" aria-label="Hauptnavigation">
-      <a href="/" {% if aktiv == "start" %}aria-current="page"{% endif %}>Start</a>
-      <a href="/anliegen" {% if aktiv == "anliegen" %}aria-current="page"{% endif %}>Anliegen stellen</a>
-      <a href="/freigaben" {% if aktiv == "konsole" %}aria-current="page"{% endif %}>Support-Konsole{% if offene_freigaben %} <span class="zaehler"><span class="nur-sr">, offen: </span>{{ offene_freigaben }}</span>{% endif %}</a>
-      <a href="/betrieb" {% if aktiv == "betrieb" %}aria-current="page"{% endif %}>Betrieb</a>
+    {% if rolle == "gast" %}
+    <nav class="navi" aria-label="Main navigation">
+      <a href="/" {% if aktiv == "replay" %}aria-current="page"{% endif %}>Recorded run</a>
     </nav>
+    <span class="budget">Live access by personal link</span>
+    {% else %}
+    <nav class="navi" aria-label="Main navigation">
+      <a href="/" {% if aktiv == "start" %}aria-current="page"{% endif %}>Start</a>
+      <a href="/anliegen" {% if aktiv == "anliegen" %}aria-current="page"{% endif %}>New request</a>
+      <a href="/freigaben" {% if aktiv == "konsole" %}aria-current="page"{% endif %}>Support console{% if offene_freigaben %} <span class="zaehler"><span class="nur-sr">, open: </span>{{ offene_freigaben }}</span>{% endif %}</a>
+      {% if rolle == "admin" %}<a href="/betrieb" {% if aktiv == "betrieb" %}aria-current="page"{% endif %}>Betrieb</a>{% endif %}
+    </nav>
+    {% if link %}<span class="budget" title="Live runs left on your personal link"><strong>{{ uebrig }}/5</strong> live runs</span>{% endif %}
+    {% if budget %}
     {% set prozent = [100, (100 * budget.belegt_usd / budget.deckel_usd) | round | int] | min %}
     <span class="budget">Budget {{ budget.belegt_usd | usd }} / {{ budget.deckel_usd | usd }}
       <span class="budget-balken" aria-hidden="true"><span style="width: {{ prozent }}%{% if budget.gesperrt %}; background: var(--rot){% endif %}"></span></span>
       {{ info("budget", "Budget", true) }}</span>
-    <form method="post" action="/abmelden"><button class="abmelden">Abmelden</button></form>
+    {% endif %}
+    <form method="post" action="/abmelden"><button class="abmelden">Sign out</button></form>
+    {% endif %}
     {% endblock %}
   </div></header>
   <main class="seite{% block seitenklasse %}{% endblock %}">
     {% block inhalt %}{% endblock %}
   </main>
-  <footer class="fuss">Demo mit erfundenen Kundendaten und einem echten KI-Modell (Claude Haiku 4.5). Es wird nichts versendet und nichts gebucht.</footer>
+  <footer class="fuss">Demo with made-up customer data and a real AI model (Claude Haiku 4.5). Nothing is sent and nothing is booked.</footer>
   <script src="/static/info.js"></script>
 </body>
 </html>

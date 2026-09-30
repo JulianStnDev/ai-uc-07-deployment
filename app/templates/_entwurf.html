@@ -1,23 +1,23 @@
-{# Kundensicht (Variante A). Wartet der Kunde auf eine Entscheidung, fragt die Seite regelmäßig nach. #}
-<div id="kundensicht" {% if sicht.art in ("zwischenbescheid", "wird_geschrieben") %}hx-get="/lauf/{{ run_id }}/antwort" hx-trigger="every 4s" hx-swap="outerHTML"{% endif %}>
+{# Kundensicht (Variante A). Wartet der Kunde auf eine Entscheidung, fragt die Seite regelmäßig nach (nicht in der Aufzeichnung). #}
+<div id="kundensicht" {% if sicht.art in ("zwischenbescheid", "wird_geschrieben") and not aufzeichnung %}hx-get="/lauf/{{ run_id }}/antwort" hx-trigger="every 4s" hx-swap="outerHTML"{% endif %}>
 {% if sicht.art == "entwurf" %}
-  <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support · Antwortentwurf {{ info("entwurf", "Antwortentwurf") }}</div>
+  <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support · Reply draft {{ info("entwurf", "Reply draft") }}</div>
   {% if sicht.text %}
-  <div class="entwurf-hinweis" role="note"><span aria-hidden="true">✎</span><span><strong>Entwurf.</strong> Wird vor dem Versand von einem Menschen geprüft.</span></div>
-  <div class="nachricht support">{{ sicht.text }}</div>
-  {% elif ergebnis.status == "verfallen" %}<p class="leise">Dein Anliegen wurde noch nicht bearbeitet. <a href="/anliegen">Noch einmal versuchen</a></p>
-  {% else %}<p class="leise">Es gibt keinen Antwortentwurf. Ein Mitarbeiter meldet sich persönlich.</p>{% endif %}
+  <div class="entwurf-hinweis" role="note"><span aria-hidden="true">✎</span><span><strong>Draft.</strong> A human checks it before it is sent.</span></div>
+  <div class="nachricht support" lang="de">{{ sicht.text }}</div>
+  {% elif ergebnis.status == "verfallen" %}<p class="leise">The request has not been processed yet. <a href="/anliegen">Try again</a></p>
+  {% else %}<p class="leise">There is no reply draft. A support employee will get in touch personally.</p>{% endif %}
 {% elif sicht.art == "zwischenbescheid" %}
-  <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support · Zwischenbescheid {{ info("zwischenbescheid", "Zwischenbescheid") }}</div>
-  <div class="entwurf-hinweis" role="note"><span aria-hidden="true">⏳</span><span><strong>Erstattung in Prüfung.</strong> Ein Mensch entscheidet in der <a href="/freigaben">Support-Konsole</a>. Danach erscheint hier die endgültige Antwort.</span></div>
-  <div class="nachricht support">{{ sicht.text }}</div>
+  <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support · Interim reply {{ info("zwischenbescheid", "Interim reply") }}</div>
+  <div class="entwurf-hinweis" role="note"><span aria-hidden="true">⏳</span><span><strong>Refund under review.</strong> A human decides in the {% if aufzeichnung %}support console{% else %}<a href="/freigaben">support console</a>{% endif %}. The final reply appears here afterwards.</span></div>
+  <div class="nachricht support" lang="de">{{ sicht.text }}</div>
 {% elif sicht.art == "wird_geschrieben" %}
   <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support</div>
-  <p class="leise" role="status"><span class="punkt-klein" aria-hidden="true"></span> Die Entscheidung ist gefallen, die Antwort wird geschrieben …</p>
+  <p class="leise" role="status"><span class="punkt-klein" aria-hidden="true"></span> The decision has been made, the reply is being written …</p>
 {% else %}
-  <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support · Antwort nach Freigabe {{ info("endgueltig", "Antwort nach Freigabe") }}</div>
-  {# Der Mensch hat über die Erstattung entschieden, den Text selbst hat er nicht gelesen. Deshalb "entschieden", nicht "freigegeben". #}
-  <div class="entwurf-hinweis entschieden" role="note"><span aria-hidden="true">✓</span><span><strong>Vom Support entschieden am {{ sicht.entschieden | datum }} UTC</strong> (Erstattung {{ "bestätigt" if sicht.bestaetigt else "abgelehnt" }}). Diese Antwort beruht auf der Entscheidung{% if sicht.quelle == "vorlage" %} und stammt aus einer festen Vorlage{% endif %}.</span></div>
-  <div class="nachricht support">{{ sicht.text }}</div>
+  <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support · Reply after the decision {{ info("endgueltig", "Reply after the decision") }}</div>
+  {# Der Mensch hat über die Erstattung entschieden, den Text selbst hat er nicht gelesen. Deshalb "decided", nicht "approved". #}
+  <div class="entwurf-hinweis entschieden" role="note"><span aria-hidden="true">✓</span><span><strong>Decided by support on {{ sicht.entschieden | datum }} UTC</strong> (refund {{ "confirmed" if sicht.bestaetigt else "rejected" }}). This reply is based on the decision{% if sicht.quelle == "vorlage" %} and comes from a fixed template{% endif %}.</span></div>
+  <div class="nachricht support" lang="de">{{ sicht.text }}</div>
 {% endif %}
 </div>

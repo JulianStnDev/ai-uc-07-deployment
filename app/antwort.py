@@ -8,7 +8,7 @@ oder schlägt der Aufruf fehl, greift eine feste Vorlage je Entscheidung.
 
 import json
 
-from .darstellung import usd
+from .darstellung import usd_de as usd  # Kundengespräch und Prompt bleiben deutsch
 from .pruefung import PREISE, trajektorie_als_kontext
 
 ANTWORT_MODELL = "claude-haiku-4-5"

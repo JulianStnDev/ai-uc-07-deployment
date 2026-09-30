@@ -1,12 +1,17 @@
 """Web-Demo des FocusFlow-Support-Agents (UC7, Branch a: lokal, SQLite).
 
 Seiten:
-    /login              Zugangscode eingeben
-    /                   Start: "So funktioniert diese Demo" und zwei Wege
+    /                   ohne Zugang: Aufzeichnung eines echten Laufs (Replay); mit Zugang: Start
+    /?code=...          persönlicher Link: setzt das Besucher-Cookie (app/links.py legt Links an)
+    /replay             Aufzeichnung, abgespielt per SSE aus app/replay/aufzeichnung.json (ohne DB, ohne API)
+    /login              Admin-Zugangscode eingeben
     /anliegen           Kundenportal: Kunde wählen + Anliegen schreiben (oder Pause, wenn Budget aufgebraucht)
     /lauf/{id}          Links Kundenportal mit Antwortentwurf, rechts "Hinter den Kulissen" live per SSE
     /freigaben          Support-Konsole: Erstattungsempfehlungen bestätigen oder ablehnen, Übergaben
-    /betrieb            Übersicht: Läufe, Kosten, Dauer, Fehlerquote, Prüfungen
+    /betrieb            Übersicht: Läufe, Kosten, Dauer, Fehlerquote, Prüfungen (nur Admin)
+
+Rollen: gast (kein Zugang, nur Replay), link (persönlicher Link, sieht nur Läufe mit dem eigenen Code),
+admin (Zugangscode, sieht alles). Oberfläche für Besucher auf Englisch, das Kundengespräch bleibt deutsch.
 
 Start lokal:  uvicorn --factory app.main:create_app --reload   (Einstellungen: app/einstellungen.py, .env.example)
 """
@@ -23,7 +28,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -40,7 +45,9 @@ MAX_TEXT_ZEICHEN = 1000
 SSE_PING_S = 15
 POLL_S = 3  # Abfrage-Intervall, wenn ein Lauf auf einer anderen Instanz läuft
 RUN_ID_MUSTER = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$")
-OFFENE_PFADE = ("/login", "/health", "/static/")
+OFFENE_PFADE = ("/health", "/static/", "/robots.txt")
+GAST_PFADE = {"/", "/replay", "/replay/stream", "/login"}  # ohne Zugang erreichbar (sonst Umleitung zum Replay)
+NUR_ADMIN = ("/betrieb", "/diagnose")
 
 HIER = Path(__file__).parent
 KUNDEN = {k["kunden_id"]: k for k in json.loads((DATA_DIR / "kunden.json").read_text(encoding="utf-8"))["kunden"]}
@@ -49,6 +56,9 @@ BEISPIELE = [{"id": t["id"], "kunden_id": t["kunde_id"], "text": t["text"], "lab
              for t in json.loads((UC4_ROOT / "evals" / "aufgaben.json").read_text(encoding="utf-8"))["aufgaben"]
              if t.get("kunde_id") in KUNDEN]
 BEISPIEL_TEXTE = {b["id"]: b["text"] for b in BEISPIELE}
+# Aufzeichnung eines echten Laufs (scripts/replay_export.py, aus Neon). Liegt im Code, damit das Replay ohne
+# Datenbankabfragen und ohne API auskommt (nur der Start einer Instanz greift einmal auf Neon zu).
+AUFZEICHNUNG = json.loads((HIER / "replay" / "aufzeichnung.json").read_text(encoding="utf-8"))
 
 
 def neue_run_id() -> str:
@@ -163,13 +173,11 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
         if quelle == "llm":
             await pruefen(run_id, "antwort")
 
-    def kundensicht(lauf: dict) -> dict:
+    def kundensicht(lauf: dict, empfehlungen: list[dict], a: dict | None) -> dict:
         """Was der Kunde im Portal sieht (Variante A)."""
-        empfehlungen = speicher.empfehlungen_zum_lauf(lauf["run_id"])
         ergebnis = lauf["ergebnis"] or {}
         if not empfehlungen:
             return {"art": "entwurf", "text": ergebnis.get("entwurf")}
-        a = speicher.antwort(lauf["run_id"])
         if a:
             return {"art": "antwort", "text": a["text"], "quelle": a["quelle"],
                     "entschieden": max(e["entschieden"] for e in empfehlungen),
@@ -183,34 +191,86 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
                                  abo=darstellung.abo_text)
     templates.env.globals.update(info=hinweise.info)
 
+    def rolle(request: Request) -> str:
+        return getattr(request.state, "rolle", "gast")
+
+    def nur(request: Request) -> str | None:
+        """Filter für Speicher-Abfragen: der eigene Code für Besucher mit Link, None (alles) für den Admin."""
+        return request.state.link["code"] if rolle(request) == "link" else None
+
+    def sichtbar(request: Request, lauf: dict | None) -> bool:
+        """Admin sieht jeden Lauf, ein Besucher mit Link nur Läufe mit seinem Code, ein Gast keinen."""
+        if lauf is None or rolle(request) == "gast":
+            return False
+        return rolle(request) == "admin" or lauf.get("zugang") == request.state.link["code"]
+
     def seite(request: Request, name: str, status_code: int = 200, **ctx) -> HTMLResponse:
-        ctx.setdefault("budget", budget.stand(speicher, cfg.monatsdeckel_usd))
-        ctx.setdefault("offene_freigaben", len(speicher.offene_empfehlungen()))
+        r = rolle(request)
+        if r != "gast":  # Gäste sehen nur das Replay; dafür wird die Datenbank nicht angefragt
+            ctx.setdefault("budget", budget.stand(speicher, cfg.monatsdeckel_usd))
+            ctx.setdefault("offene_freigaben", len(speicher.offene_empfehlungen(nur(request))))
+        ctx.setdefault("budget", None)
+        ctx.setdefault("offene_freigaben", 0)
         ctx.setdefault("aktiv", None)
-        return templates.TemplateResponse(request, name, {"kunden": KUNDEN, "zahlungen": ZAHLUNGEN, **ctx},
-                                          status_code=status_code)
+        link = request.state.link if r == "link" else None
+        return templates.TemplateResponse(request, name, {
+            "kunden": KUNDEN, "zahlungen": ZAHLUNGEN, "rolle": r, "link": link,
+            "uebrig": zugang.uebrig(link) if link else None, "link_bis": zugang.ablauf(link) if link else None, **ctx},
+            status_code=status_code)
 
     def fragment(name: str, **ctx) -> str:
         return templates.get_template(name).render(kunden=KUNDEN, zahlungen=ZAHLUNGEN, **ctx)
 
     # ---------- Zugang ----------
 
+    def link_cookie_setzen(antwort, code: str) -> None:
+        antwort.set_cookie(zugang.LINK_COOKIE_NAME, zugang.link_cookie_wert(code, cfg.session_secret),
+                           max_age=zugang.LINK_COOKIE_MAX_ALTER_S, httponly=True, samesite="lax", secure=cfg.cookie_secure)
+
     @app.middleware("http")
-    async def zugangscode_pruefen(request: Request, call_next):
+    async def zugang_pruefen(request: Request, call_next):
+        """Legt request.state.rolle fest: admin (Zugangscode), link (persönlicher Link) oder gast (nur Replay)."""
         pfad = request.url.path
+        request.state.rolle, request.state.link = "gast", None
         if pfad.startswith(OFFENE_PFADE):
             return await call_next(request)
-        if not zugang.cookie_gueltig(request.cookies.get(zugang.COOKIE_NAME), cfg.zugangscode, cfg.session_secret):
-            return RedirectResponse("/login", status_code=303)
-        return await call_next(request)
+        if zugang.cookie_gueltig(request.cookies.get(zugang.COOKIE_NAME), cfg.zugangscode, cfg.session_secret):
+            request.state.rolle = "admin"
+            return await call_next(request)
+        # Persönlicher Link: Ein Code in der URL hat Vorrang vor einem älteren Besucher-Cookie.
+        neu = (request.query_params.get("code") or "").strip().lower() if pfad == "/" else ""
+        code = neu or zugang.link_aus_cookie(request.cookies.get(zugang.LINK_COOKIE_NAME), cfg.session_secret)
+        if code:
+            # Bei jeder Anfrage gegen die Datenbank prüfen: Sperren und Ablauf wirken sofort.
+            link = speicher.link(code) if zugang.CODE_MUSTER.match(code) else None
+            status = zugang.link_status(link)
+            if status in ("ok", "leer"):
+                if neu:  # Cookie setzen und die Adresse ohne Code anzeigen (landet sonst in Verlauf und Lesezeichen)
+                    antwort = RedirectResponse("/", status_code=303)
+                    link_cookie_setzen(antwort, code)
+                    return antwort
+                request.state.rolle, request.state.link = "link", link
+                if pfad.startswith(NUR_ADMIN):
+                    return RedirectResponse("/", status_code=303)
+                return await call_next(request)
+            antwort = RedirectResponse(f"/?hinweis={status}", status_code=303)
+            antwort.delete_cookie(zugang.LINK_COOKIE_NAME)
+            return antwort
+        if pfad in GAST_PFADE:
+            return await call_next(request)
+        return RedirectResponse("/", status_code=303)
 
     @app.get("/health")
     async def health():
         return JSONResponse({"ok": True})
 
+    @app.get("/robots.txt", response_class=PlainTextResponse)
+    async def robots():
+        return "User-agent: *\nDisallow: /\n"  # Crawler sollen die Instanz nicht wecken
+
     @app.get("/diagnose")
     async def diagnose():
-        """Smoke-Test ohne API-Kosten: Startet die gebündelte Claude-CLI mit --version (nur mit Zugangscode)."""
+        """Smoke-Test ohne API-Kosten: Startet die gebündelte Claude-CLI mit --version (nur Admin)."""
         import claude_agent_sdk
         cli = Path(claude_agent_sdk.__file__).parent / "_bundled" / "claude"
         start = time.perf_counter()
@@ -227,14 +287,13 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
 
     @app.get("/login", response_class=HTMLResponse)
     async def login_seite(request: Request):
-        return templates.TemplateResponse(request, "login.html", {"fehler": None})
+        return seite(request, "login.html", fehler=None)
 
     @app.post("/login")
     async def login(request: Request, code: str = Form("")):
         if not zugang.code_richtig(code, cfg.zugangscode):
             await asyncio.sleep(1)  # bremst Durchprobieren
-            return templates.TemplateResponse(request, "login.html", {"fehler": "Der Zugangscode stimmt nicht."},
-                                              status_code=401)
+            return seite(request, "login.html", status_code=401, fehler="That access code is not correct.")
         antwort = RedirectResponse("/", status_code=303)
         antwort.set_cookie(zugang.COOKIE_NAME, zugang.cookie_wert(cfg.zugangscode, cfg.session_secret),
                            max_age=zugang.COOKIE_MAX_ALTER_S, httponly=True, samesite="lax", secure=cfg.cookie_secure)
@@ -242,15 +301,68 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
 
     @app.post("/abmelden")
     async def abmelden():
-        antwort = RedirectResponse("/login", status_code=303)
+        antwort = RedirectResponse("/", status_code=303)
         antwort.delete_cookie(zugang.COOKIE_NAME)
+        antwort.delete_cookie(zugang.LINK_COOKIE_NAME)
         return antwort
+
+    # ---------- Aufzeichnung (Replay): ohne Datenbank, ohne API ----------
+
+    def replay_seite(request: Request, hinweis: str | None = None) -> HTMLResponse:
+        lauf = AUFZEICHNUNG["lauf"]
+        eigene = speicher.laeufe_zum_zugang(nur(request)) if rolle(request) == "link" else []
+        return seite(request, "lauf.html", aktiv="replay", lauf=lauf, live=True, stream_url="/replay/stream",
+                     aufzeichnung=AUFZEICHNUNG, teile=None, schritte_html=[], hinweis=hinweis, eigene=eigene,
+                     titel=hinweise.BEISPIEL_LABELS["T01"])
+
+    @app.get("/replay", response_class=HTMLResponse)
+    async def replay(request: Request):
+        return replay_seite(request)
+
+    @app.get("/replay/stream")
+    async def replay_stream():
+        """Spielt die Aufzeichnung mit denselben Fragmenten ab wie einen Live-Lauf: Schritte, Ergebnis mit
+        Zwischenbescheid, Entscheidung in der Support-Konsole, endgültige Antwort."""
+        lauf, takt = AUFZEICHNUNG["lauf"], cfg.replay_takt_s
+        entschieden = AUFZEICHNUNG["empfehlungen"]
+        offen = [{**e, "entscheidung": None, "kommentar": None, "entschieden": None} for e in entschieden]
+        agent_pruefung = [p for p in AUFZEICHNUNG["pruefungen"] if p["art"] == "agent"]
+
+        def teile(empfehlungen, antwort_, pruefungen, konsole=False) -> dict[str, str]:
+            return abschluss_teile(lauf, lauf["ergebnis"], empfehlungen, antwort_, pruefungen, aufzeichnung=True,
+                                   konsole=entschieden if konsole else None)
+
+        async def ereignisse():
+            await asyncio.sleep(takt / 2)
+            for i in range(len(lauf["ereignisse"])):
+                yield darstellung.sse_nachricht("schritt", schritt_html(lauf["ereignisse"], i))
+                await asyncio.sleep(takt)
+            for name, html in teile(offen, None, agent_pruefung).items():  # Agent fertig: Kunde sieht den Zwischenbescheid
+                yield darstellung.sse_nachricht(name, html)
+            await asyncio.sleep(takt * 2)
+            t = teile(entschieden, None, agent_pruefung, konsole=True)   # ein Mensch entscheidet in der Konsole
+            for name in ("abschluss", "entwurf"):
+                yield darstellung.sse_nachricht(name, t[name])
+            await asyncio.sleep(takt)
+            t = teile(entschieden, AUFZEICHNUNG["antwort"], AUFZEICHNUNG["pruefungen"], konsole=True)  # endgültige Antwort
+            for name in ("entwurf", "abschluss"):
+                yield darstellung.sse_nachricht(name, t[name])
+            yield darstellung.sse_nachricht("ende", "")
+
+        return StreamingResponse(ereignisse(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     # ---------- Start und Anliegen ----------
 
     @app.get("/", response_class=HTMLResponse)
-    async def startseite(request: Request):
-        return seite(request, "start.html", aktiv="start")
+    async def startseite(request: Request, hinweis: str | None = None):
+        hinweis = hinweis if hinweis in ("abgelaufen", "gesperrt", "unbekannt", "leer") else None
+        if rolle(request) == "gast":
+            return replay_seite(request, hinweis)
+        if rolle(request) == "link" and zugang.link_status(request.state.link) == "leer":
+            return replay_seite(request, "leer")  # Kontingent verbraucht: zurück zum Replay, eigene Fälle bleiben
+        eigene = speicher.laeufe_zum_zugang(nur(request)) if rolle(request) == "link" else []
+        return seite(request, "start.html", aktiv="start", eigene=eigene)
 
     def formular(request: Request, fehler: str | None = None, kunden_id: str = "", text: str = "",
                  beispiel: str = "", status_code: int = 200):
@@ -259,32 +371,43 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
                      fehler=fehler, kunden_id=kunden_id, text=text, beispiel=beispiel, beispiele=BEISPIELE,
                      max_zeichen=MAX_TEXT_ZEICHEN, laeuft_gerade=speicher.laufende_anzahl())
 
+    def kontingent_leer(request: Request) -> bool:
+        return rolle(request) == "link" and zugang.link_status(request.state.link) == "leer"
+
     @app.get("/anliegen", response_class=HTMLResponse)
     async def anliegen(request: Request):
+        if kontingent_leer(request):
+            return RedirectResponse("/?hinweis=leer", status_code=303)
         return formular(request)
 
     @app.post("/lauf")
     async def lauf_starten(request: Request, kunden_id: str = Form(""), text: str = Form(""), beispiel: str = Form("")):
         text = text.strip()
+        if kontingent_leer(request):
+            return RedirectResponse("/?hinweis=leer", status_code=303)
         if kunden_id not in KUNDEN:
-            return formular(request, "Bitte einen Kunden aus der Liste wählen.", kunden_id, text, beispiel, 400)
+            return formular(request, "Please choose a customer from the list.", kunden_id, text, beispiel, 400)
         if not text:
-            return formular(request, "Bitte ein Anliegen eingeben.", kunden_id, text, beispiel, 400)
+            return formular(request, "Please write a request.", kunden_id, text, beispiel, 400)
         if len(text) > MAX_TEXT_ZEICHEN:
-            return formular(request, f"Das Anliegen ist zu lang ({len(text)} Zeichen, erlaubt sind {MAX_TEXT_ZEICHEN}).",
+            return formular(request, f"The request is too long ({len(text)} characters, {MAX_TEXT_ZEICHEN} allowed).",
                             kunden_id, text[:MAX_TEXT_ZEICHEN], beispiel, 400)
         # Zwischen Prüfung und Anlegen gibt es kein await: Zwei gleichzeitige Anfragen können sich hier nicht überholen.
         if budget.stand(speicher, cfg.monatsdeckel_usd).gesperrt:
             return formular(request, status_code=503)
         if speicher.laufende_anzahl() >= cfg.max_parallele_laeufe:
-            return formular(request, "Gerade bearbeitet der Agent schon ein anderes Anliegen. Bitte in einer halben Minute noch einmal versuchen.",
+            return formular(request, "The agent is already working on another request. Please try again in half a minute.",
                             kunden_id, text, beispiel, 429)
+        code = nur(request)
+        # Kontingent des persönlichen Links (5 Läufe): atomar in der Datenbank, zusätzlich zum Monatsdeckel.
+        if code is not None and not speicher.link_lauf_buchen(code):
+            return RedirectResponse("/?hinweis=leer", status_code=303)
         run_id = neue_run_id()
         absender = KUNDEN[kunden_id]["email"]  # Absender kommt immer aus dem gewählten Kunden, nie aus dem Formular
         titel = hinweise.titel_fuer(text, beispiel, BEISPIEL_TEXTE)
         # Nur anlegen. Gestartet wird der Lauf von der SSE-Anfrage der Laufseite (lauf_stream): So läuft der
         # Agent garantiert auf der Instanz, mit der der Browser verbunden ist, auch bei mehreren Instanzen.
-        speicher.lauf_anlegen(run_id, kunden_id, absender, text, titel)
+        speicher.lauf_anlegen(run_id, kunden_id, absender, text, titel, zugang=code)
         return RedirectResponse(f"/lauf/{run_id}", status_code=303)
 
     # ---------- Lauf ansehen ----------
@@ -294,35 +417,47 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
         erste_notiz = e["art"] == "text" and not any(x["art"] == "text" for x in ereignisse[:i])
         return fragment("_schritt.html", s=darstellung.schritt(e, erste_notiz))
 
-    def abschluss_html(run_id: str, ergebnis: dict) -> dict[str, str]:
-        """Am Ende gibt es drei Teile: Status-Badge (rechts oben), Kundensicht (links), Abschluss (rechts)."""
-        lauf = speicher.lauf(run_id)
-        ctx = {"run_id": run_id, "ergebnis": ergebnis, "empfehlungen": speicher.empfehlungen_zum_lauf(run_id),
-               "sicht": kundensicht(lauf), "pruefungen": speicher.pruefungen_zum_lauf(run_id)}
+    def abschluss_teile(lauf: dict, ergebnis: dict, empfehlungen: list[dict], antwort_: dict | None,
+                        pruefungen: list[dict], aufzeichnung: bool = False, konsole: list[dict] | None = None) -> dict[str, str]:
+        """Am Ende gibt es drei Teile: Status-Badge (rechts oben), Kundensicht (links), Abschluss (rechts).
+        konsole: nur im Replay, die Entscheidung aus der Support-Konsole als eigene Karte."""
+        ctx = {"run_id": lauf["run_id"], "ergebnis": ergebnis, "empfehlungen": empfehlungen,
+               "sicht": kundensicht(lauf, empfehlungen, antwort_), "pruefungen": pruefungen, "aufzeichnung": aufzeichnung,
+               "konsole": konsole}
         return {name: fragment(f"_{name}.html", **ctx) for name in ("status", "entwurf", "abschluss")}
 
-    @app.get("/lauf/{run_id}/antwort", response_class=HTMLResponse)
-    async def lauf_antwort(run_id: str):
-        """Wird von der Laufseite abgefragt, solange der Kunde auf die Entscheidung wartet."""
+    def abschluss_html(run_id: str, ergebnis: dict) -> dict[str, str]:
+        return abschluss_teile(speicher.lauf(run_id), ergebnis, speicher.empfehlungen_zum_lauf(run_id),
+                               speicher.antwort(run_id), speicher.pruefungen_zum_lauf(run_id))
+
+    def eigener_lauf(request: Request, run_id: str) -> dict | None:
+        """Der Lauf, wenn es ihn gibt und der Besucher ihn sehen darf. Fremde Läufe verhalten sich wie unbekannte."""
         lauf = speicher.lauf(run_id) if RUN_ID_MUSTER.match(run_id) else None
+        return lauf if sichtbar(request, lauf) else None
+
+    @app.get("/lauf/{run_id}/antwort", response_class=HTMLResponse)
+    async def lauf_antwort(request: Request, run_id: str):
+        """Wird von der Laufseite abgefragt, solange der Kunde auf die Entscheidung wartet."""
+        lauf = eigener_lauf(request, run_id)
         if lauf is None or not lauf["ergebnis"]:
             return HTMLResponse("", status_code=404)
         return HTMLResponse(abschluss_html(run_id, lauf["ergebnis"])["entwurf"])
 
     @app.get("/lauf/{run_id}", response_class=HTMLResponse)
     async def lauf_seite(request: Request, run_id: str):
-        lauf = speicher.lauf(run_id) if RUN_ID_MUSTER.match(run_id) else None
+        lauf = eigener_lauf(request, run_id)
         if lauf is None:
             return seite(request, "nicht_gefunden.html", status_code=404)
         live = lauf["status"] in ("angelegt", "laeuft")
         teile = abschluss_html(run_id, lauf["ergebnis"]) if not live and lauf["ergebnis"] else None
         return seite(request, "lauf.html", aktiv="anliegen", lauf=lauf, live=live, teile=teile,
+                     stream_url=f"/lauf/{run_id}/stream", aufzeichnung=None,
                      titel=lauf["titel"] or hinweise.titel_fuer(lauf["text"], None, {}),
                      schritte_html=[] if live else [schritt_html(lauf["ereignisse"], i) for i in range(len(lauf["ereignisse"]))])
 
     @app.get("/lauf/{run_id}/stream")
     async def lauf_stream(request: Request, run_id: str):
-        if not RUN_ID_MUSTER.match(run_id) or speicher.lauf(run_id) is None:
+        if eigener_lauf(request, run_id) is None:
             return JSONResponse({"fehler": "unbekannter Lauf"}, status_code=404)
         # Bei einem Verbindungsabbruch schickt der Browser die letzte ID mit; wir machen dort weiter.
         try:
@@ -367,10 +502,10 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
                 try:
                     b = await starten()
                 except TimeoutError:
-                    verfallen("Gerade ist viel los: Der Agent war die ganze Zeit mit anderen Anliegen beschäftigt. "
-                              "Bitte versuch es gleich noch einmal, es wurde nichts berechnet.")
+                    verfallen("It's busy right now: the agent was working on other requests the whole time. "
+                              "Please try again in a moment. Nothing was charged and your run was not counted.")
                 except asyncio.CancelledError:  # Tab geschlossen, bevor ein Platz frei wurde
-                    verfallen("Die Seite wurde geschlossen, bevor der Agent starten konnte. Es wurde nichts berechnet.")
+                    verfallen("The page was closed before the agent could start. Nothing was charged.")
                     raise
             if b is None:
                 # Lauf ist fertig, läuft auf einer anderen Instanz oder wurde von einer anderen Anfrage gestartet:
@@ -413,21 +548,26 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
 
     @app.get("/freigaben", response_class=HTMLResponse)
     async def freigaben(request: Request, hinweis: str | None = None):
-        offen = speicher.offene_empfehlungen()
+        code = nur(request)  # Besucher mit Link: nur Empfehlungen aus eigenen Läufen
+        offen = speicher.offene_empfehlungen(code)
         entwuerfe = {e["run_id"]: ((speicher.lauf(e["run_id"]) or {}).get("ergebnis") or {}).get("entwurf") for e in offen}
         return seite(request, "konsole.html", aktiv="konsole", offen=offen, entwuerfe=entwuerfe,
-                     entschieden=speicher.entschiedene_empfehlungen(), statistik=speicher.freigabe_statistik(),
-                     uebergaben=speicher.uebergaben(), hinweis=hinweis)
+                     entschieden=speicher.entschiedene_empfehlungen(nur_zugang=code),
+                     statistik=speicher.freigabe_statistik(code), uebergaben=speicher.uebergaben(nur_zugang=code),
+                     hinweis=hinweis)
 
     @app.post("/freigaben/{empfehlungs_id}")
-    async def entscheiden(empfehlungs_id: str, entscheidung: str = Form(""), begruendung: str = Form(""),
-                          notiz: str = Form("")):
+    async def entscheiden(request: Request, empfehlungs_id: str, entscheidung: str = Form(""),
+                          begruendung: str = Form(""), notiz: str = Form("")):
         """begruendung geht an den Kunden (über die endgültige Antwort), notiz bleibt intern."""
         if entscheidung not in ("bestaetigt", "abgelehnt"):
             return RedirectResponse("/freigaben?hinweis=ungueltig", status_code=303)
+        run_id = speicher.run_id_zur_empfehlung(empfehlungs_id)
+        if run_id is None or not sichtbar(request, speicher.lauf(run_id)):  # fremde Empfehlung wie unbekannte
+            return RedirectResponse("/freigaben?hinweis=unbekannt", status_code=303)
         ok = speicher.entscheiden(empfehlungs_id, entscheidung, begruendung[:1000], notiz[:1000])
         if ok:
-            hintergrund(antwort_erstellen(speicher.run_id_zur_empfehlung(empfehlungs_id)))  # Variante A
+            hintergrund(antwort_erstellen(run_id))  # Variante A
         return RedirectResponse(f"/freigaben?hinweis={'gespeichert' if ok else 'schon_entschieden'}", status_code=303)
 
     # ---------- Betrieb ----------

@@ -244,3 +244,11 @@ h2.ueberzeile { font-size: .78rem; }
 .anteil-balken span { display: block; height: 100%; background: var(--gruen); }
 .knopf.klein { padding: 4px 10px; font-size: .8rem; }
 @media (max-width: 820px) { .qualitaet { grid-template-columns: 1fr; } .achse span:nth-child(even) { visibility: hidden; } }
+
+/* ---------- Aufzeichnung (Replay) und Hinweise für Besucher ---------- */
+.aufzeichnung { border: 1px solid var(--linie); border-left: 4px solid var(--rot); border-radius: var(--radius-klein);
+  padding: var(--a3) var(--a4); margin-bottom: var(--a4); background: var(--flaeche); }
+.aufzeichnung p + p { margin-top: var(--a1); }
+.sprachhinweis { margin-top: var(--a2); }
+.aufruf { margin-top: var(--a5); text-align: center; font-weight: 500; }
+.replay-konsole { border-left: 3px solid var(--gruen); padding-left: var(--a3); }

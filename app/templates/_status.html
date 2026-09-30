@@ -1,4 +1,4 @@
-{% if ergebnis.status == "fertig" and not ergebnis.pflichten_offen %}<span class="badge bestaetigt">fertig</span>
-{% elif ergebnis.status == "fertig" %}<span class="badge offen">fertig, unvollständig</span>
-{% elif ergebnis.status == "verfallen" %}<span class="badge neutral">nicht gestartet</span>
-{% else %}<span class="badge abgelehnt">abgebrochen</span>{% endif %}
+{% if ergebnis.status == "fertig" and not ergebnis.pflichten_offen %}<span class="badge bestaetigt">done</span>
+{% elif ergebnis.status == "fertig" %}<span class="badge offen">done, incomplete</span>
+{% elif ergebnis.status == "verfallen" %}<span class="badge neutral">not started</span>
+{% else %}<span class="badge abgelehnt">stopped</span>{% endif %}

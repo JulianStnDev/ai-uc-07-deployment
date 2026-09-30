@@ -1,0 +1,13 @@
+<h2 class="abschnitt-titel">Your cases</h2>
+<div class="karte" style="padding: 16px 12px;">
+  <table class="tabelle">
+    <thead><tr><th>Time (UTC)</th><th>Customer</th><th>Request</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for l in eigene %}
+    <tr><td>{{ l.erstellt | datum }}</td><td>{{ kunden[l.kunden_id].name }}</td>
+      <td><a href="/lauf/{{ l.run_id }}">{{ l.titel or "Request" }}</a></td>
+      <td>{{ {"fertig": "done", "fehler": "error", "abgebrochen": "stopped", "verfallen": "not started", "angelegt": "waiting", "laeuft": "running"}.get(l.status, l.status) }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
