@@ -1,6 +1,6 @@
 # Deployment auf Cloud Run (Frankfurt)
 
-Stand 2026-09-30. Projekt `focusflow-demo-510014` (Anzeigename „focusflow-demo“), Region `europe-west3`, Dienst `uc7`.
+Stand 2026-09-30 (Revision `uc7-00008`, Datenbankrolle `uc7_app`). Projekt `focusflow-demo-510014` (Anzeigename „focusflow-demo“), Region `europe-west3`, Dienst `uc7`.
 Öffentliche URL: https://uc7-807149335205.europe-west3.run.app (ohne Login: aufgezeichneter Lauf; live nur mit persönlichem Link oder Admin-Zugangscode).
 
 ## Einmalige Einrichtung
@@ -37,6 +37,22 @@ done
 ```
 Neue Version eines Secrets (z. B. nach Passwort-Reset): `versions add` wie oben, dann im Deploy-Befehl die Versionsnummer erhöhen. Die Versionen sind bewusst fest (nicht `latest`), weil Cloud Run Umgebungsvariablen nur beim Start einer Instanz liest.
 
+### Datenbankrolle `uc7_app` (seit 2026-09-30)
+
+`DATABASE_URL` nutzt nicht den Neon-Owner, sondern eine eigene Rolle nur für die UC7-Datenbank `neondb` (Begründung in docs/decisions.md). Einmalig als Owner angelegt, das Passwort per `secrets.token_urlsafe(32)` erzeugt und nie angezeigt:
+```sql
+CREATE ROLE uc7_app LOGIN PASSWORD '…';
+GRANT CONNECT ON DATABASE neondb TO uc7_app;
+GRANT USAGE ON SCHEMA public TO uc7_app;
+GRANT SELECT, INSERT, UPDATE ON laeufe, empfehlungen, pruefungen, antworten, freigaben, zugangslinks TO uc7_app;
+GRANT DELETE ON pruefungen TO uc7_app;   -- einzige Löschung der App: Prüfung neu schreiben
+```
+Die Rolle darf kein DDL (keine Tabellen anlegen, ändern oder löschen, kein `TRUNCATE`, keine Schemas, keine Rollen). Sie kommt nicht in die Datenbanken `analytics` und `uc5_app`, weil dort PUBLIC kein `CONNECT` hat.
+
+- **Schemaänderungen:** Die App prüft beim Start, ob alle Tabellen und nachgerüsteten Spalten da sind, und führt dann kein DDL aus. Kommt eine Tabelle oder Spalte dazu, die App einmal lokal mit einer Owner-`DATABASE_URL` starten (oder das SQL als Owner ausführen), danach `GRANT` für die neue Tabelle an `uc7_app`, dann erst deployen.
+- **Postgres-Tests** (`UC7_PG_TEST=1`) legen ein eigenes Schema an und brauchen dafür eine Rolle mit `CREATE` auf der Datenbank, also nicht `uc7_app`.
+- **Passwort wechseln:** `ALTER ROLE uc7_app PASSWORD '…'` als Owner, neue Secret-Version, Versionsnummer im Deploy-Befehl erhöhen, lokale `.env` anpassen.
+
 ### Dienstkonten
 
 - **Laufzeit:** eigenes Konto `uc7-run`, darf nur die vier Secrets lesen (`roles/secretmanager.secretAccessor` je Secret). Kein Editor, kein Zugriff auf andere Dienste.
@@ -65,10 +81,11 @@ gcloud run deploy uc7 --source . --region europe-west3 \
   --service-account uc7-run@focusflow-demo-510014.iam.gserviceaccount.com \
   --cpu 1 --memory 1Gi --max-instances 2 --concurrency 4 --min-instances 0 --timeout 600 \
   --no-cpu-throttling --execution-environment gen2 --allow-unauthenticated \
-  --set-secrets ANTHROPIC_API_KEY=uc7-anthropic-api-key:1,ZUGANGSCODE=uc7-zugangscode:1,SESSION_SECRET=uc7-session-secret:1,DATABASE_URL=uc7-database-url:1 \
+  --set-secrets ANTHROPIC_API_KEY=uc7-anthropic-api-key:1,ZUGANGSCODE=uc7-zugangscode:1,SESSION_SECRET=uc7-session-secret:1,DATABASE_URL=uc7-database-url:2 \
   --set-env-vars COOKIE_SECURE=1,MAX_PARALLELE_LAEUFE=2,AGENT_LAEUFE_PRO_INSTANZ=1,AGENT_WARTEZEIT_S=90
 ```
 
+- `uc7-database-url:2` ist die Verbindung als `uc7_app`. Version 1 (Owner) ist deaktiviert.
 - `--source .` lädt den Code hoch (was nicht mit soll, steht in `.gcloudignore`, vor allem `.env`), baut mit dem Dockerfile per Cloud Build und legt das Image in Artifact Registry (`cloud-run-source-deploy`) ab.
 - `--allow-unauthenticated` heißt nur: Google verlangt kein Google-Konto. Die App selbst zeigt ohne Zugang nur die Aufzeichnung (`/`, `/replay`), `/login`, `/health` und `/robots.txt`.
 - Keine neuen Secrets für Branch (e). Die Tabelle `zugangslinks` und die Spalte `laeufe.zugang` legt die App beim Start selbst an. `REPLAY_TAKT_S` (Standard 2 s je Schritt) ist optional.
