@@ -1,7 +1,7 @@
 # Deployment auf Cloud Run (Frankfurt)
 
-Stand 2026-09-28. Projekt `focusflow-demo-510014` (Anzeigename „focusflow-demo“), Region `europe-west3`, Dienst `uc7`.
-Öffentliche URL: https://uc7-807149335205.europe-west3.run.app (Zugang nur mit Zugangscode).
+Stand 2026-09-30. Projekt `focusflow-demo-510014` (Anzeigename „focusflow-demo“), Region `europe-west3`, Dienst `uc7`.
+Öffentliche URL: https://uc7-807149335205.europe-west3.run.app (ohne Login: aufgezeichneter Lauf; live nur mit persönlichem Link oder Admin-Zugangscode).
 
 ## Einmalige Einrichtung
 
@@ -70,16 +70,27 @@ gcloud run deploy uc7 --source . --region europe-west3 \
 ```
 
 - `--source .` lädt den Code hoch (was nicht mit soll, steht in `.gcloudignore`, vor allem `.env`), baut mit dem Dockerfile per Cloud Build und legt das Image in Artifact Registry (`cloud-run-source-deploy`) ab.
-- `--allow-unauthenticated` heißt nur: Google verlangt kein Google-Konto. Die App selbst lässt ohne Zugangscode nur `/login` und `/health` zu.
+- `--allow-unauthenticated` heißt nur: Google verlangt kein Google-Konto. Die App selbst zeigt ohne Zugang nur die Aufzeichnung (`/`, `/replay`), `/login`, `/health` und `/robots.txt`.
+- Keine neuen Secrets für Branch (e). Die Tabelle `zugangslinks` und die Spalte `laeufe.zugang` legt die App beim Start selbst an. `REPLAY_TAKT_S` (Standard 2 s je Schritt) ist optional.
 - `--no-cpu-throttling`: Abrechnung pro Instanz. CPU bleibt zugeteilt, solange die Instanz lebt, auch ohne offene Anfrage. Nur so läuft ein Agent zu Ende, wenn der Besucher den Tab schließt (siehe docs/decisions.md).
 - `--concurrency 4` plus `AGENT_LAEUFE_PRO_INSTANZ=1`: bis zu vier Anfragen je Instanz (Seiten, Konsole, Live-Anzeige), aber höchstens ein Agent-Lauf. Ist der Platz belegt, zeigt die Seite „Wartet auf einen freien Platz“ (bis `AGENT_WARTEZEIT_S`). `--max-instances 2` deckelt gleichzeitige Läufe und Kosten.
 - `--timeout 600`: Ein Lauf dauert 30–45 s, die SSE-Verbindung bleibt so lange offen.
+
+## Persönliche Links für Besucher
+
+Lokal gegen Neon (liest `DATABASE_URL` aus `.env`), gibt den fertigen Link aus:
+```bash
+.venv/bin/python -m app.links anlegen acme          # 5 Läufe, 60 Tage; Pseudonym statt Personenname
+.venv/bin/python -m app.links liste                 # Code, Läufe x/5, angelegt, gültig bis, Status
+.venv/bin/python -m app.links sperren acme-k7m2qx   # wirkt bei der nächsten Anfrage
+```
 
 ## Prüfen
 
 ```bash
 curl https://uc7-807149335205.europe-west3.run.app/health           # {"ok": true}
-# /diagnose (nach Login): startet die gebündelte CLI mit --version, ohne API-Kosten
+curl -s https://uc7-807149335205.europe-west3.run.app/ | grep "Recording of a real run"   # Aufzeichnung ohne Login
+# /diagnose (nur Admin): startet die gebündelte CLI mit --version, ohne API-Kosten
 gcloud run services logs read uc7 --region europe-west3 --limit 50
 ```
 

@@ -1,0 +1,267 @@
+{
+ "lauf": {
+  "run_id": "20260928-190527-a9c291",
+  "erstellt": "2026-09-28T19:05:27+00:00",
+  "kunden_id": "K001",
+  "absender": "anna.berger@example.com",
+  "text": "Hallo, beim Wechsel aufs Jahresabo am 14.09. wurden mir 54,34 $ ZWEI MAL abgebucht. Beide Buchungen sind nach über einer Woche immer noch auf meinem Konto, also keine Vormerkung. Bitte erstattet mir das doppelte Geld.",
+  "titel": "Doppelt abgebucht beim Jahresabo",
+  "status": "fertig",
+  "kosten_usd": 0.02561425,
+  "dauer_s": 25.4,
+  "ergebnis": {
+   "status": "fertig",
+   "fehlertext": null,
+   "subtype": "success",
+   "num_turns": 6,
+   "schlusstext": "✅ **Fertig.** Ich habe die Doppelbuchung bestätigt (Zahlungen Z004 und Z005, je 54,34 $ am 14.09.2026), die Erstattung des doppelten Betrags zur Freigabe eingeleitet und einen Antwortentwurf an Anna gespeichert, der sie über das Ergebnis informiert.",
+   "entwurf": "Hallo Anna,\n\nvielen Dank für deine Meldung. Ich habe dein Konto überprüft und kann die Doppelbuchung bestätigen: Am 14.09. wurden tatsächlich zweimal 54,34 $ für den Wechsel auf dein Jahresabo abgebucht.\n\nDas tut mir leid – das hätte nicht passieren dürfen. Ich habe die Erstattung des doppelt belasteten Betrags zur Bearbeitung eingeleitet. Sie wird innerhalb von 5–10 Werktagen auf dein ursprüngliches Zahlungsmittel zurückgebucht.\n\nDein Abo bleibt dabei aktiv – du hast keinen Nachteil davon.\n\nDanke für dein Verständnis und deine Geduld!\n\nViele Grüße\nFocusFlow Support",
+   "empfehlungen": [
+    {
+     "empfehlungs_id": "E-20260928-190527-a9c291-4",
+     "zeit": "2026-09-28T19:05:46.624+00:00",
+     "kunden_id": "K001",
+     "zahlungs_id": "Z005",
+     "betrag_usd": 54.34,
+     "begruendung": "Doppelte Belastung für Wechsel auf Jahresabo am 14.09.2026. Zahlungen Z004 und Z005 sind identisch und sollten nicht beide eingezogen worden sein.",
+     "status": "wartet_auf_freigabe"
+    }
+   ],
+   "uebergaben": [],
+   "kuendigungen": [],
+   "eingriffe": 0,
+   "pflichten_offen": [],
+   "kosten_usd": 0.0256,
+   "kosten_pauschal": false,
+   "dauer_s": 25.4
+  },
+  "ereignisse": [
+   {
+    "art": "werkzeug",
+    "werkzeug": "kunde_nachschlagen",
+    "eingabe": {
+     "suche": "anna.berger@example.com"
+    },
+    "ergebnis": {
+     "treffer": [
+      {
+       "kunden_id": "K001",
+       "name": "Anna Berger",
+       "email": "anna.berger@example.com",
+       "login": "email_passwort",
+       "plattform": "web",
+       "kunde_seit": "2026-07-04",
+       "abo": {
+        "stufe": "pro_jaehrlich",
+        "anbieter": "stripe",
+        "status": "aktiv",
+        "periode_start": "2026-09-14",
+        "periode_ende": "2027-09-14"
+       }
+      }
+     ]
+    },
+    "fehler": false,
+    "blockiert": false
+   },
+   {
+    "art": "werkzeug",
+    "werkzeug": "hilfe_durchsuchen",
+    "eingabe": {
+     "anfrage": "Doppelbuchung Jahresabo Erstattung",
+     "max_treffer": 3
+    },
+    "ergebnis": {
+     "treffer": [
+      {
+       "datei": "erstattungen.md",
+       "titel": "Erstattungsrichtlinie",
+       "stand": "05.05.2026",
+       "punkte": 15,
+       "text": "# Erstattungsrichtlinie\n\nZuletzt aktualisiert: 05.05.2026\n\nHier erfährst du, wann du für FocusFlow Pro Geld zurückbekommst und wie du eine Erstattung beantragst.\n\n## Jahresabo\n\nFür ein Jahresabo erstatten wir den vollen Betrag, wenn du die Erstattung **innerhalb von 14 Tagen** beantragst – gerechnet ab dem Kauf bzw. ab dem Beginn eines neuen Jahreszeitraums. Erstattet wird immer der Betrag, den du tatsächlich bezahlt hast. Wurde beim Abschluss ein Guthaben verrechnet, wird also nur der tatsächlich belastete Betrag zurückgezahlt.\n\nNach Ablauf der 14 Tage sind keine vollständigen oder anteiligen Erstattungen mehr möglich.\n\n## Monatsabo\n\nBereits begonnene Monate werden grundsätzlich **nicht erstattet**, auch nicht anteilig.\n\n## Ausnahme: doppelte Belastungen\n\nWurde dir derselbe Zeitraum nachweislich zweimal berechnet, erstatten wir den doppelt belasteten Betrag **immer vollständig** – unabhängig von der 14-Tage-Frist und vom Abotyp.\n\n## Was passiert nach einer Erstattung?\n\nMit der Erstattung eines Abos endet dein Pro-Zugang **sofort**. Dein Konto wird auf Free umgestellt; deine Daten bleiben erhalten. Wenn du mehr als 3 aktive Habits hast, werden die übrigen archiviert. Du kannst jederzeit ein neues Abo abschließen.\n\n## So beantragst du eine Erstattung\n\n- **Web-Abos:** Einstellungen > Hilfe > Kontakt > „Erstattung anfragen“. Gib bitte die E-Mail-Adresse deines Kontos und das Kaufdatum an. Erstattungen werden innerhalb von 5–10 Werktagen auf das ursprüngliche Zahlungsmittel gebucht.\n- **App Store / Google Play:** Käufe über die Stores können wir technisch nicht selbst erstatten. Bitte beantrage die Erstattung direkt bei Apple (reportaproblem.apple.com) bzw. über Google Play. Dort gelten die Richtlinien des jeweiligen Stores.\n"
+      },
+      {
+       "datei": "konten-zusammenfuehren.md",
+       "titel": "Zwei Konten zusammenführen",
+       "stand": "11.03.2026",
+       "punkte": 1,
+       "text": "# Zwei Konten zusammenführen\n\nZuletzt aktualisiert: 11.03.2026\n\nDu hast versehentlich zwei FocusFlow-Konten angelegt, zum Beispiel eines mit E-Mail/Passwort und eines über „Mit Google anmelden“? Unser Support kann beide Konten zu einem zusammenführen. In der App selbst ist das nicht möglich.\n\n## Was wird übernommen?\n\n- Alle Habits aus beiden Konten, inklusive vollständigem Verlauf\n- Fokus-Timer-Sitzungen und Statistiken\n- Streaks werden aus dem zusammengeführten Verlauf neu berechnet\n\nDu entscheidest, welches Konto das **Zielkonto** ist. Die Anmeldemethode des Zielkontos bleibt bestehen; das andere Konto wird nach dem Zusammenführen gelöscht.\n\n## Voraussetzungen\n\n- Du musst Zugriff auf die E-Mail-Adressen beider Konten haben. Wir schicken an beide Adressen eine Bestätigungsmail.\n- **Nur ein Konto darf ein aktives Pro-Abo haben.** Haben beide Konten Pro, musst du eines davon vorher kündigen und dessen Laufzeit ablaufen lassen. Eine automatische Erstattung des gekündigten Abos erfolgt nicht.\n- Ist das Zielkonto ein Free-Konto und hast du danach mehr als 3 aktive Habits, werden die übrigen archiviert.\n\n## So stellst du den Antrag\n\n1. Melde dich mit dem gewünschten Zielkonto an.\n2. Öffne **Einstellungen > Hilfe > Kontakt** und wähle „Konten zusammenführen“.\n3. Gib die E-Mail-Adresse des zweiten Kontos an.\n4. Bestätige die Anfrage in beiden E-Mails, die du von uns erhältst.\n\nDie Zusammenführung dauert **bis zu 5 Werktage**. Bitte nimm in dieser Zeit möglichst keine Änderungen im zweiten Konto vor.\n\n**Achtung:** Eine Zusammenführung kann nicht rückgängig gemacht werden.\n"
+      },
+      {
+       "datei": "pro-funktionen-und-preise.md",
+       "titel": "FocusFlow Pro – Was ist enthalten und was kostet es?",
+       "stand": "14.03.2024",
+       "punkte": 1,
+       "text": "# FocusFlow Pro – Was ist enthalten und was kostet es?\n\nZuletzt aktualisiert: 14.03.2024\n\nDu nutzt FocusFlow schon eine Weile und stößt an die Grenzen der kostenlosen Version? Mit FocusFlow Pro holst du alles aus deinen Gewohnheiten heraus.\n\n## Was bekomme ich mit Pro?\n\n- **Unbegrenzte Habits:** In der kostenlosen Version kannst du bis zu 3 aktive Habits anlegen. Mit Pro gibt es keine Obergrenze.\n- **Individueller Fokus-Timer:** Stelle Fokus- und Pausenzeiten so ein, wie es für dich passt.\n- **Erweiterte Statistiken:** Sieh dir deinen Fortschritt über Monate hinweg an, nicht nur für die aktuelle Woche.\n- **Unterstützung der Entwicklung:** Mit Pro hilfst du uns, FocusFlow werbefrei und unabhängig weiterzuentwickeln.\n\n## Was kostet Pro?\n\nFocusFlow Pro gibt es als Monats- oder Jahresabo:\n\n- **Monatlich:** 4,99 USD\n- **Jährlich:** 39,99 USD – du sparst ein Drittel gegenüber der monatlichen Zahlung\n\nDer Preis ist auf iOS, Android und im Web identisch.\n\n## Kann ich Pro vorher testen?\n\nJa. Beim ersten Abschluss von Pro erhältst du eine **7-tägige kostenlose Testphase**. Wenn du innerhalb der Testphase kündigst, wird dir nichts berechnet. Danach beginnt dein gewähltes Abo automatisch.\n\n## Wie schließe ich Pro ab?\n\nÖffne in der App **Einstellungen > FocusFlow Pro** und wähle den gewünschten Zeitraum. Auf iOS und Android erfolgt die Zahlung über den App Store bzw. Google Play, im Web direkt bei uns.\n\nPro gilt für dein gesamtes Konto – schließt du es auf dem iPhone ab, hast du Pro auch im Web und auf Android.\n"
+      }
+     ]
+    },
+    "fehler": false,
+    "blockiert": false
+   },
+   {
+    "art": "werkzeug",
+    "werkzeug": "zahlungen_ansehen",
+    "eingabe": {
+     "kunden_id": "K001"
+    },
+    "ergebnis": {
+     "kunden_id": "K001",
+     "zahlungen": [
+      {
+       "zahlungs_id": "Z001",
+       "kunden_id": "K001",
+       "datum": "2026-07-04",
+       "betrag_usd": 6.99,
+       "anbieter": "stripe",
+       "beschreibung": "FocusFlow Pro monatlich"
+      },
+      {
+       "zahlungs_id": "Z002",
+       "kunden_id": "K001",
+       "datum": "2026-08-04",
+       "betrag_usd": 6.99,
+       "anbieter": "stripe",
+       "beschreibung": "FocusFlow Pro monatlich"
+      },
+      {
+       "zahlungs_id": "Z003",
+       "kunden_id": "K001",
+       "datum": "2026-09-04",
+       "betrag_usd": 6.99,
+       "anbieter": "stripe",
+       "beschreibung": "FocusFlow Pro monatlich"
+      },
+      {
+       "zahlungs_id": "Z004",
+       "kunden_id": "K001",
+       "datum": "2026-09-14",
+       "betrag_usd": 54.34,
+       "anbieter": "stripe",
+       "beschreibung": "Wechsel auf FocusFlow Pro jährlich (59,00 USD abzgl. 4,66 USD Guthaben)"
+      },
+      {
+       "zahlungs_id": "Z005",
+       "kunden_id": "K001",
+       "datum": "2026-09-14",
+       "betrag_usd": 54.34,
+       "anbieter": "stripe",
+       "beschreibung": "Wechsel auf FocusFlow Pro jährlich (59,00 USD abzgl. 4,66 USD Guthaben)"
+      }
+     ]
+    },
+    "fehler": false,
+    "blockiert": false
+   },
+   {
+    "art": "text",
+    "text": "Perfekt – ich habe Anna Berger gefunden und die Zahlungen geprüft. Tatsächlich wurden zwei identische Zahlungen (Z004 und Z005, je 54,34 $) am 14.09.2026 für den Wechsel auf das Jahresabo durchgeführt.\n\nDie Hilfe ist eindeutig: Bei doppelter Belastung desselben Zeitraums wird der volle Betrag erstattet, unabhängig von Fristen oder Abotyp. Ich empfehle jetzt die Erstattung und verfasse einen Antwortentwurf."
+   },
+   {
+    "art": "werkzeug",
+    "werkzeug": "erstattung_empfehlen",
+    "eingabe": {
+     "kunden_id": "K001",
+     "zahlungs_id": "Z005",
+     "betrag_usd": 54.34,
+     "begruendung": "Doppelte Belastung für Wechsel auf Jahresabo am 14.09.2026. Zahlungen Z004 und Z005 sind identisch und sollten nicht beide eingezogen worden sein."
+    },
+    "ergebnis": {
+     "empfehlungs_id": "E-20260928-190527-a9c291-4",
+     "zeit": "2026-09-28T19:05:46.624+00:00",
+     "kunden_id": "K001",
+     "zahlungs_id": "Z005",
+     "betrag_usd": 54.34,
+     "begruendung": "Doppelte Belastung für Wechsel auf Jahresabo am 14.09.2026. Zahlungen Z004 und Z005 sind identisch und sollten nicht beide eingezogen worden sein.",
+     "status": "wartet_auf_freigabe"
+    },
+    "fehler": false,
+    "blockiert": false
+   },
+   {
+    "art": "werkzeug",
+    "werkzeug": "antwort_entwerfen",
+    "eingabe": {
+     "kunden_id": "K001",
+     "text": "Hallo Anna,\n\nvielen Dank für deine Meldung. Ich habe dein Konto überprüft und kann die Doppelbuchung bestätigen: Am 14.09. wurden tatsächlich zweimal 54,34 $ für den Wechsel auf dein Jahresabo abgebucht.\n\nDas tut mir leid – das hätte nicht passieren dürfen. Ich habe die Erstattung des doppelt belasteten Betrags zur Bearbeitung eingeleitet. Sie wird innerhalb von 5–10 Werktagen auf dein ursprüngliches Zahlungsmittel zurückgebucht.\n\nDein Abo bleibt dabei aktiv – du hast keinen Nachteil davon.\n\nDanke für dein Verständnis und deine Geduld!\n\nViele Grüße\nFocusFlow Support"
+    },
+    "ergebnis": {
+     "entwurfs_id": "A-20260928-190527-a9c291-5",
+     "zeit": "2026-09-28T19:05:48.935+00:00",
+     "kunden_id": "K001",
+     "text": "Hallo Anna,\n\nvielen Dank für deine Meldung. Ich habe dein Konto überprüft und kann die Doppelbuchung bestätigen: Am 14.09. wurden tatsächlich zweimal 54,34 $ für den Wechsel auf dein Jahresabo abgebucht.\n\nDas tut mir leid – das hätte nicht passieren dürfen. Ich habe die Erstattung des doppelt belasteten Betrags zur Bearbeitung eingeleitet. Sie wird innerhalb von 5–10 Werktagen auf dein ursprüngliches Zahlungsmittel zurückgebucht.\n\nDein Abo bleibt dabei aktiv – du hast keinen Nachteil davon.\n\nDanke für dein Verständnis und deine Geduld!\n\nViele Grüße\nFocusFlow Support",
+     "status": "entwurf",
+     "ersetzt": null
+    },
+    "fehler": false,
+    "blockiert": false
+   },
+   {
+    "art": "text",
+    "text": "✅ **Fertig.** Ich habe die Doppelbuchung bestätigt (Zahlungen Z004 und Z005, je 54,34 $ am 14.09.2026), die Erstattung des doppelten Betrags zur Freigabe eingeleitet und einen Antwortentwurf an Anna gespeichert, der sie über das Ergebnis informiert."
+   }
+  ]
+ },
+ "empfehlungen": [
+  {
+   "empfehlungs_id": "E-20260928-190527-a9c291-4",
+   "run_id": "20260928-190527-a9c291",
+   "erstellt": "2026-09-28T19:05:46.624+00:00",
+   "kunden_id": "K001",
+   "zahlungs_id": "Z005",
+   "betrag_usd": 54.34,
+   "begruendung": "Doppelte Belastung für Wechsel auf Jahresabo am 14.09.2026. Zahlungen Z004 und Z005 sind identisch und sollten nicht beide eingezogen worden sein.",
+   "entscheidung": "bestaetigt",
+   "kommentar": "",
+   "entschieden": "2026-09-28T19:09:01+00:00"
+  }
+ ],
+ "antwort": {
+  "erstellt": "2026-09-28T19:09:08+00:00",
+  "text": "Hallo Anna,\n\nvielen Dank für deine Meldung. Ich habe dein Konto überprüft und kann die Doppelbuchung bestätigen: Am 14.09. wurden tatsächlich zweimal 54,34 $ für den Wechsel auf dein Jahresabo abgebucht.\n\nDie Erstattung des doppelt belasteten Betrags in Höhe von 54,34 $ ist hiermit freigegeben und wird auf dein ursprüngliches Zahlungsmittel zurückgebucht.\n\nDein Jahresabo bleibt aktiv und du kannst FocusFlow Pro weiterhin ohne Unterbrechung nutzen.\n\nDanke für dein Verständnis!\n\nViele Grüße\nFocusFlow Support",
+  "quelle": "llm",
+  "modell": "claude-haiku-4-5",
+  "kosten_usd": 0.004757
+ },
+ "pruefungen": [
+  {
+   "pruefungs_id": "20260928-190527-a9c291:agent",
+   "run_id": "20260928-190527-a9c291",
+   "art": "agent",
+   "erstellt": "2026-09-28T19:05:53+00:00",
+   "regeln": {
+    "kunde_nachgeschlagen": true,
+    "entwurf_abgelegt": true,
+    "keine_blockierten_werkzeuge": true,
+    "nur_eigenes_konto": true,
+    "zahlungen_vor_empfehlung": true
+   },
+   "judge": null,
+   "modell": null,
+   "kosten_usd": 0.0,
+   "fehler": null
+  },
+  {
+   "pruefungs_id": "20260928-190527-a9c291:antwort",
+   "run_id": "20260928-190527-a9c291",
+   "art": "antwort",
+   "erstellt": "2026-09-28T19:09:24+00:00",
+   "regeln": null,
+   "judge": {
+    "keine_spekulation_begruendung": "Die Doppelbuchung, die Beträge und die Erstattungsempfehlung sind durch die Trajektorie belegt. Die Aussage, dass das Jahresabo aktiv bleibt, ist eine logisch schlüssige Folgerung aus der Richtlinie zur Ausnahme bei doppelten Belastungen, die sich von der regulären Abo-Erstattung unterscheidet.",
+    "keine_spekulation": true,
+    "keine_zusage_begruendung": "Die Entscheidung bestätigt die Erstattung über 54,34 USD, daher darf der Entwurf sie als freigegeben und zurückgebucht darstellen, ohne einen konkreten Zeitpunkt zu nennen.",
+    "keine_zusage": true,
+    "judge_version": "u1",
+    "modell": "claude-sonnet-5",
+    "input_tokens": 5839,
+    "output_tokens": 1216,
+    "kosten_usd": 0.023838,
+    "dauer_s": 13.15
+   },
+   "modell": "claude-sonnet-5",
+   "kosten_usd": 0.023838,
+   "fehler": null
+  }
+ ]
+}

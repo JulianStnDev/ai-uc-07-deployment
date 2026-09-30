@@ -66,3 +66,32 @@ def test_verwaist_nur_alte_laeufe(speicher):
     speicher.lauf_anlegen("neu", "K001", "a@example.com", "x", status="laeuft")
     assert speicher.verwaiste_laeufe_abbrechen(0.5) == 1
     assert speicher.lauf("alt")["status"] == "abgebrochen" and speicher.lauf("neu")["status"] == "laeuft"
+
+
+def test_link_kontingent_atomar_bei_gleichzeitigen_anfragen(speicher):
+    """20 gleichzeitige Buchungen über den Verbindungspool (wie zwei Instanzen mit je mehreren Anfragen): genau 5 greifen."""
+    from concurrent.futures import ThreadPoolExecutor
+    from app.speicher import LINK_LAEUFE
+    speicher.link_anlegen("acme-aaaaaa")
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        ergebnisse = list(pool.map(lambda _: speicher.link_lauf_buchen("acme-aaaaaa"), range(20)))
+    assert sum(ergebnisse) == LINK_LAEUFE and speicher.link("acme-aaaaaa")["laeufe"] == LINK_LAEUFE
+    assert speicher.link_sperren("acme-aaaaaa") and speicher.link("acme-aaaaaa")["gesperrt"] == 1
+
+
+def test_filter_nach_code_auf_postgres(speicher):
+    for run_id, code in (("r-admin", None), ("r-eins", "eins-aaaaaa"), ("r-zwei", "zwei-aaaaaa")):
+        speicher.lauf_anlegen(run_id, "K001", "a@example.com", "x", zugang=code)
+        speicher.lauf_abschliessen(run_id, status="fertig", kosten_usd=0.03, kosten_pauschal=False, dauer_s=30,
+                                   ergebnis={"uebergaben": [{"uebergabe_id": "U", "grund": run_id, "prioritaet": "normal"}]},
+                                   ereignisse=[], empfehlungen=[{"empfehlungs_id": f"E-{run_id}", "zeit": "2026-09-30T12:00:00+00:00",
+                                                                 "kunden_id": "K001", "zahlungs_id": "Z005", "betrag_usd": 54.34,
+                                                                 "begruendung": "doppelt"}])
+    assert [e["run_id"] for e in speicher.offene_empfehlungen("eins-aaaaaa")] == ["r-eins"]
+    assert len(speicher.offene_empfehlungen()) == 3
+    assert speicher.entscheiden("E-r-zwei", "bestaetigt", "") is True
+    assert speicher.entschiedene_empfehlungen(nur_zugang="eins-aaaaaa") == []
+    assert speicher.freigabe_statistik("zwei-aaaaaa") == {"gesamt": 1, "bestaetigt": 1}
+    assert speicher.freigabe_statistik("eins-aaaaaa") == {"gesamt": 0, "bestaetigt": 0}
+    assert [u["grund"] for u in speicher.uebergaben(nur_zugang="zwei-aaaaaa")] == ["r-zwei"]
+    assert [l["run_id"] for l in speicher.laeufe_zum_zugang("eins-aaaaaa")] == ["r-eins"]

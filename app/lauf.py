@@ -131,11 +131,11 @@ async def lauf_ausfuehren(run_id: str, absender: str, text: str, speicher: Speic
                 ergebnis_msg = msg
         status = "fertig"
     except asyncio.CancelledError:  # Server fährt herunter
-        status, fehlertext = "abgebrochen", "Der Lauf wurde abgebrochen, weil der Server beendet wurde."
+        status, fehlertext = "abgebrochen", "The run was stopped because the server shut down."
         raise
     except Exception as e:  # noqa: BLE001 – jeder Fehler soll protokolliert und angezeigt werden
         log.exception("Lauf %s fehlgeschlagen", run_id)
-        fehlertext = f"Der Lauf ist mit einem Fehler abgebrochen ({type(e).__name__})."
+        fehlertext = f"The run stopped with an error ({type(e).__name__})."
     finally:
         dauer_s = round(time.perf_counter() - start, 1)
         kosten = ergebnis_msg.total_cost_usd if ergebnis_msg else None

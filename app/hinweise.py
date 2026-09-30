@@ -1,4 +1,5 @@
 """Info-Hinweise ("i") und Beispiel-Anliegen. Texte in einfacher Sprache, je höchstens zwei Sätze.
+Englisch wie die ganze Besucher-Oberfläche; nur "fehlerquote" steht auf der Betriebsseite (Admin) und bleibt deutsch.
 
 Die Hinweise erscheinen per Klick oder Tastatur (Knopf mit aria-expanded/aria-controls, siehe
 static/info.js). Ein Hinweis wird im Template mit dem Makro `info(schluessel, label)` eingebunden.
@@ -10,28 +11,29 @@ import secrets
 from markupsafe import Markup, escape
 
 INFO = {
-    "budget": "Jede Anfrage an das KI-Modell kostet ein paar Cent. Die Demo hat ein festes Monatsbudget, ist es aufgebraucht, macht sie bis zum Monatsanfang Pause.",
-    "absender": "Alle Kunden sind erfunden. Das Anliegen kommt immer von der E-Mail-Adresse des gewählten Kunden, so kann der Agent prüfen, wem das Konto gehört.",
-    "werkzeug": "Der Agent arbeitet mit Werkzeugen, wie ein Mitarbeiter mit seinen Programmen: Konto nachschlagen, Zahlungen ansehen, Hilfe lesen. Jeder Punkt hier ist ein solcher Schritt.",
-    "empfehlung": "Der Agent darf kein Geld zurückzahlen, er kann eine Erstattung nur empfehlen. Ausgezahlt würde erst, wenn ein Mensch die Empfehlung bestätigt.",
-    "entwurf": "Der Agent verschickt nichts selbst. Seine Antwort ist ein Entwurf, den ein Mitarbeiter prüft und erst dann abschickt.",
-    "uebergabe": "Ist ein Fall unklar oder liegt er außerhalb seiner Befugnisse, gibt der Agent ihn an einen Menschen ab, statt zu raten.",
-    "kuendigung": "Ein Abo kündigen darf der Agent allein, weil das umkehrbar ist. Pro läuft bis zum Ende der bezahlten Zeit weiter.",
-    "freigabe": "Hier entscheidet ein Mensch über die Erstattungen, die der Agent empfohlen hat. In der Demo wird nichts gebucht, aber jede Entscheidung wird festgehalten.",
-    "schatten": "Schattenmodus heißt: Der Agent empfiehlt, ein Mensch entscheidet. So lässt sich messen, wie oft der Agent richtig lag, bevor man ihm mehr zutraut.",
-    "quote": "Anteil der Empfehlungen, die ein Mensch bestätigt hat. Hohe Werte sprechen dafür, dem Agent hier später mehr selbst zu überlassen.",
-    "kosten": "Was dieser eine Durchlauf beim KI-Anbieter gekostet hat.",
-    "schritte": "Wie oft der Agent nachgedacht und dann gehandelt hat, bis der Fall erledigt war.",
-    "notiz": "Zwischendurch schreibt der Agent kurz auf, was er vorhat. Das hilft beim Nachvollziehen, der Kunde sieht es nicht.",
-    "erinnerung": "Vergisst der Agent eine Pflicht, etwa den Antwortentwurf, erinnert ihn der Programmcode daran. Die Zahl zeigt, wie oft das nötig war.",
-    "zwischenbescheid": "Über eine Erstattung entscheidet ein Mensch. Bis dahin bekommt der Kunde nur diese Eingangsbestätigung, damit ihm nichts versprochen wird, was noch nicht feststeht.",
-    "agententwurf": "So hatte der Agent geantwortet. Weil er darin Erstattungen zusagen kann, die erst ein Mensch entscheidet, geht dieser Text so nicht an den Kunden.",
-    "endgueltig": "Diese Antwort entsteht erst nach der Entscheidung in der Support-Konsole. Sie teilt dem Kunden das Ergebnis mit und wird vor dem Versand noch geprüft.",
-    "pruefung": "Nach jedem Durchlauf prüft der Programmcode feste Regeln. Jeden fünften Durchlauf liest zusätzlich ein zweites KI-Modell den Antworttext gegen.",
-    "spekulation": "Steht im Antworttext etwas über den Fall, das der Agent nirgends nachgelesen hat? Dann gilt der Text als spekulativ.",
-    "zusage": "Sagt der Text eine Erstattung als sicher zu, über die noch kein Mensch entschieden hat? Das darf nicht passieren.",
+    "budget": "Every request to the AI model costs a few cents. The demo has a fixed monthly budget; once it is used up, it pauses until the next month.",
+    "absender": "All customers are made up. The request always comes from the chosen customer's email address, so the agent can check who owns the account.",
+    "werkzeug": "The agent works with tools, like a support employee with their software: look up an account, check payments, read help articles. Each item here is one such step.",
+    "empfehlung": "The agent cannot pay out money, it can only recommend a refund. Money would only be paid once a human confirms the recommendation.",
+    "entwurf": "The agent does not send anything itself. Its reply is a draft that a support employee checks before sending.",
+    "uebergabe": "If a case is unclear or beyond its permissions, the agent hands it over to a human instead of guessing.",
+    "kuendigung": "The agent may cancel a subscription on its own because that can be undone. Pro stays active until the end of the paid period.",
+    "freigabe": "Here a human decides on the refunds the agent recommended. Nothing is booked in the demo, but every decision is recorded.",
+    "schatten": "Shadow mode means: the agent recommends, a human decides. This shows how often the agent was right before trusting it with more.",
+    "quote": "Share of recommendations a human confirmed. High values suggest letting the agent handle more of these cases on its own later.",
+    "kosten": "What this one run cost at the AI provider.",
+    "schritte": "How often the agent thought and then acted until the case was done.",
+    "notiz": "Along the way, the agent briefly notes what it plans to do. This helps to follow its work; the customer does not see it.",
+    "erinnerung": "If the agent forgets a duty, such as the reply draft, the program code reminds it. The number shows how often that was needed.",
+    "zwischenbescheid": "A human decides on refunds. Until then, the customer only gets this acknowledgement, so nothing is promised that has not been decided.",
+    "agententwurf": "This is what the agent replied. Because it may promise refunds that only a human can decide, this text does not go to the customer as is.",
+    "endgueltig": "This reply is written only after the decision in the support console. It tells the customer the outcome and is checked again before sending.",
+    "pruefung": "After every run, the program code checks fixed rules. For every fifth run, a second AI model also reviews the reply text.",
+    "spekulation": "Does the reply state anything about the case that the agent never looked up? Then the text counts as speculative.",
+    "zusage": "Does the text promise a refund that no human has decided on yet? That must not happen.",
     "fehlerquote": "Anteil der Durchläufe, die mit einem Fehler endeten oder abgebrochen wurden. Anliegen, die nie gestartet sind, zählen nicht mit.",
-    "blockiert": "Der Agent darf nur seine sieben Support-Werkzeuge benutzen. Alles andere lehnt der Programmcode ab, bevor es ausgeführt wird.",
+    "blockiert": "The agent may only use its seven support tools. The program code rejects anything else before it runs.",
+    "sprache": "FocusFlow is a fictional German app, so customer conversations are in German. Everything around them is in English.",
 }
 
 
@@ -43,17 +45,17 @@ def info(schluessel: str, label: str, rechts: bool = False) -> Markup:
     return Markup(
         f'<span class="info{" rechts" if rechts else ""}" data-info="{schluessel}">'
         f'<button type="button" class="info-knopf" aria-expanded="false" aria-controls="{i}" '
-        f'aria-label="Erklärung: {escape(label)}">i</button>'
+        f'aria-label="Explanation: {escape(label)}">i</button>'
         f'<span class="info-text" id="{i}" role="note" hidden>{escape(text)}</span></span>')
 
 
 # Kurze Labels für die Beispiel-Chips (UC4-Testset). Sie dienen auch als Titel des Anliegens.
 BEISPIEL_LABELS = {
-    "T01": "Doppelt abgebucht beim Jahresabo", "T02": "6,99 zweimal abgebucht", "T03": "Jahresabo zurückgeben",
-    "T04": "Verlängerung vergessen zu kündigen", "T05": "Kündigen und anteilig erstatten", "T06": "iPhone-Kauf zurückgeben",
-    "T07": "Zwei Konten, doppelt bezahlt", "T08": "Abo kündigen", "T09": "Kündigung nicht angekommen?",
-    "T10": "Kündigen auf Android", "T11": "Android-Jahresabo zurückgeben", "T12": "Was kostet Pro?",
-    "T13": "Pro nicht aktiviert", "T14": "Anderes Konto kündigen", "T15": "Geld zurück und kündigen",
+    "T01": "Charged twice for annual plan", "T02": "6.99 charged twice", "T03": "Return annual plan",
+    "T04": "Forgot to cancel renewal", "T05": "Cancel with prorated refund", "T06": "Refund an iPhone purchase",
+    "T07": "Two accounts, paid twice", "T08": "Cancel subscription", "T09": "Cancellation not received?",
+    "T10": "Cancel on Android", "T11": "Return Android annual plan", "T12": "How much is Pro?",
+    "T13": "Pro not activated", "T14": "Cancel someone else's account", "T15": "Refund and cancel",
 }
 
 TITEL_MAX_ZEICHEN = 60

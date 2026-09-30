@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block sprache %}de{% endblock %}
 {% block titel %}Betrieb{% endblock %}
 {% block inhalt %}
 {% macro usd4(x) %}{{ "–" if x is none else ("%.4f USD" | format(x)).replace(".", ",") }}{% endmacro %}

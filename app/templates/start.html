@@ -2,27 +2,33 @@
 {% block titel %}Start{% endblock %}
 {% block inhalt %}
 <section class="held">
-  <p class="ueberzeile">So funktioniert diese Demo</p>
-  <h1>Ein KI-Agent im Kundensupport, zum Ausprobieren</h1>
-  <p>FocusFlow ist eine erfundene Habit-Tracker-App. Ihr Support wird von einem KI-Agent unterstützt, der Konten nachschlägt, Regeln liest und Antworten vorbereitet. Was er darf und was nicht, ist fest geregelt.</p>
+  <p class="ueberzeile">How this demo works</p>
+  <h1>An AI agent in customer support, to try out</h1>
+  <p>FocusFlow is a made-up habit tracker app. Its support team is assisted by an AI agent that looks up accounts, reads the rules and prepares replies. What it may and may not do is fixed in code.</p>
+  {% include "_sprache.html" %}
 </section>
+{% if link %}
+<p class="meldung" role="status">Your personal link: <strong>{{ uebrig }} of 5 live runs</strong> left, valid until {{ link_bis.isoformat()[:10] | datum }}. You only see your own cases here.</p>
+{% endif %}
 {% if budget.gesperrt %}
-<p class="meldung" role="status">Das Demo-Budget für diesen Monat ist aufgebraucht. Neue Anliegen gehen ab dem {{ budget.naechster_monat }} wieder, die Support-Konsole bleibt offen.</p>
+<p class="meldung" role="status">The demo budget for this month is used up. New requests are possible again from {{ budget.naechster_monat }}; the support console stays open. Meanwhile you can <a href="/replay">watch a recorded run</a>.</p>
 {% endif %}
 <ol class="schritte3">
-  <li class="karte schritt3"><div class="nr" aria-hidden="true">1</div><h2 class="h3">Du schreibst als Kunde</h2>
-    <p>Wähle einen erfundenen Kunden und beschreibe ein Anliegen, etwa eine doppelte Abbuchung oder eine Kündigung.</p></li>
-  <li class="karte schritt3"><div class="nr" aria-hidden="true">2</div><h2 class="h3">Der Agent arbeitet</h2>
-    <p>Du siehst live, welche Schritte er macht: Konto prüfen, Zahlungen ansehen, Hilfe lesen. Nach etwa 30 Sekunden steht ein Antwortentwurf.</p></li>
-  <li class="karte schritt3"><div class="nr" aria-hidden="true">3</div><h2 class="h3">Ein Mensch entscheidet</h2>
-    <p>Geld zurückzahlen darf der Agent nicht. Er empfiehlt, und in der Support-Konsole bestätigt oder lehnt ein Mensch ab.</p></li>
+  <li class="karte schritt3"><div class="nr" aria-hidden="true">1</div><h2 class="h3">You write as a customer</h2>
+    <p>Pick a made-up customer and describe a request, for example a double charge or a cancellation.</p></li>
+  <li class="karte schritt3"><div class="nr" aria-hidden="true">2</div><h2 class="h3">The agent works</h2>
+    <p>You see live which steps it takes: check the account, look at payments, read help articles. After about 30 seconds there is a reply draft.</p></li>
+  <li class="karte schritt3"><div class="nr" aria-hidden="true">3</div><h2 class="h3">A human decides</h2>
+    <p>The agent may not pay money back. It recommends, and in the support console a human confirms or rejects.</p></li>
 </ol>
 <div class="wege">
   <a class="karte weg" href="/anliegen"><span class="symbol" aria-hidden="true">✉️</span>
-    <h2>Als Kunde ein Anliegen stellen</h2><p>Schreib dem Support und schau dem Agent dabei über die Schulter.</p>
-    <span class="los">Anliegen stellen →</span></a>
+    <h2>Send a request as a customer</h2><p>Write to support and watch the agent over its shoulder.</p>
+    <span class="los">New request →</span></a>
   <a class="karte weg" href="/freigaben"><span class="symbol" aria-hidden="true">🧑‍💼</span>
-    <h2>Support-Konsole (Freigaben)</h2><p>Sieh dir als Mitarbeiter an, welche Erstattungen der Agent empfohlen hat, und entscheide selbst.</p>
-    <span class="los">Zur Konsole{% if offene_freigaben %} · {{ offene_freigaben }} offen{% endif %} →</span></a>
+    <h2>Support console (approvals)</h2><p>As a support employee, see which refunds the agent recommended, and decide yourself.</p>
+    <span class="los">Open console{% if offene_freigaben %} · {{ offene_freigaben }} open{% endif %} →</span></a>
 </div>
+{% if eigene %}{% include "_eigene.html" %}{% endif %}
+<p class="sehr-leise" style="margin-top: 24px;">No time to try it? <a href="/replay">Watch a recorded run</a> step by step.</p>
 {% endblock %}

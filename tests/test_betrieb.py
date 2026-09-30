@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from app import budget, pruefung
+from app import budget, darstellung, pruefung
 from app.antwort import antwort_schreiben as echter_antwort_schreiben  # vor dem Fake aus conftest geholt
 from app.main import betriebsdaten, create_app
 from test_app import CODE, cfg, fake_doppelabbuchung, sse_ereignisse, starte, warte_bis_fertig
@@ -42,9 +42,9 @@ def test_zwischenbescheid_dann_antwort_nach_freigabe(tmp_path, kein_echter_llm_a
     c = app_client(tmp_path)
     run_id = starte(c)
     seite = c.get(f"/lauf/{run_id}").text
-    assert "Zwischenbescheid" in seite and "Erstattung in Prüfung" in seite and 'hx-trigger="every 4s"' in seite
-    assert "Entwurf des Agents (intern)" in seite                  # Agent-Entwurf nur intern
-    assert "Entwurf des Agents (intern)" in c.get("/freigaben").text
+    assert "Interim reply" in seite and "Refund under review" in seite and 'hx-trigger="every 4s"' in seite
+    assert "Agent's draft (internal)" in seite                  # Agent-Entwurf nur intern
+    assert "Agent's draft (internal)" in c.get("/freigaben").text
     eid = c.app.state.speicher.offene_empfehlungen()[0]["empfehlungs_id"]
     c.post(f"/freigaben/{eid}", data={"entscheidung": "bestaetigt", "begruendung": "passt"})
     warte(lambda: c.app.state.speicher.antwort(run_id) is not None)
@@ -52,7 +52,7 @@ def test_zwischenbescheid_dann_antwort_nach_freigabe(tmp_path, kein_echter_llm_a
     assert a["quelle"] == "llm" and a["text"] == "Hallo, deine Erstattung ist freigegeben." and a["kosten_usd"] == 0.01
     assert kein_echter_llm_aufruf["antwort"][0]["entscheidungen"] == ["bestaetigt"]
     frag = c.get(f"/lauf/{run_id}/antwort").text
-    assert "Antwort nach Freigabe" in frag and "freigegeben" in frag and "hx-trigger" not in frag  # Abfragen endet
+    assert "Reply after the decision" in frag and "freigegeben" in frag and "hx-trigger" not in frag  # Abfragen endet
     monat = datetime.now(timezone.utc).strftime("%Y-%m")
     assert c.app.state.speicher.kosten_im_monat(monat) == pytest.approx(0.031 + 0.01 + sum(
         p["kosten_usd"] for p in c.app.state.speicher.pruefungen()))
@@ -106,7 +106,7 @@ def test_interne_notiz_landet_nie_im_prompt(tmp_path):
     assert "INTERN-7f3a" not in (sp.antwort(run_id)["entscheidungen"] or "")  # auch nicht im Antwort-Protokoll
     assert "INTERN-7f3a" not in c.get(f"/lauf/{run_id}").text              # nicht in der Kundensicht
     konsole = c.get("/freigaben").text                                      # nur intern sichtbar
-    assert "INTERN-7f3a" in konsole and "Interne Notiz" in konsole
+    assert "INTERN-7f3a" in konsole and "Internal note" in konsole
     assert sp.entschiedene_empfehlungen()[0]["notiz"] == NOTIZ
     c.__exit__(None, None, None)
 
@@ -134,8 +134,8 @@ def test_hinweis_nach_entscheidung_statt_entwurf(tmp_path):
     tag = sp.entschiedene_empfehlungen()[0]["entschieden"]
     for html in (c.get(f"/lauf/{run_id}").text, c.get(f"/lauf/{run_id}/antwort").text):
         kunde = html[html.index('id="kundensicht"'):]
-        assert "Vom Support entschieden am" in kunde and f"{tag[8:10]}.{tag[5:7]}.{tag[:4]}" in kunde
-        assert "Erstattung abgelehnt" in kunde and "Wird vor dem Versand" not in kunde
+        assert "Decided by support on" in kunde and darstellung.datum(tag) in kunde
+        assert "refund rejected" in kunde and "before it is sent" not in kunde
     c.__exit__(None, None, None)
 
 
@@ -205,7 +205,7 @@ def test_antwort_faellt_auf_vorlage_zurueck(tmp_path, monkeypatch):
     a = c.app.state.speicher.antwort(run_id)
     assert a["quelle"] == "vorlage" and a["kosten_usd"] == 0
     assert "Die Erstattung über 54,34 USD für deine Zahlung Z005 ist freigegeben." in a["text"]
-    assert "stammt aus einer festen Vorlage" in c.get(f"/lauf/{run_id}").text
+    assert "comes from a fixed template" in c.get(f"/lauf/{run_id}").text
     c.__exit__(None, None, None)
 
 
@@ -246,7 +246,7 @@ def test_judge_nur_in_stichprobe_regeln_immer(tmp_path, monkeypatch, kein_echter
     warte(lambda: c.app.state.speicher.pruefungen_zum_lauf(run_id))
     p = c.app.state.speicher.pruefungen_zum_lauf(run_id)[0]
     assert p["regeln"]["kunde_nachgeschlagen"] and p["judge"] is None and kein_echter_llm_aufruf["judge"] == []
-    assert "Nicht in der Stichprobe" in c.get(f"/lauf/{run_id}").text
+    assert "Not in the sample" in c.get(f"/lauf/{run_id}").text
     c.__exit__(None, None, None)
 
 
@@ -257,7 +257,7 @@ def test_judge_prueft_entwurf_ohne_empfehlung(tmp_path, monkeypatch, kein_echter
     warte(lambda: (c.app.state.speicher.pruefungen_zum_lauf(run_id) or [{}])[0].get("judge"))
     assert kein_echter_llm_aufruf["judge"][0]["text"] == "Hallo Ben, wir prüfen das."
     seite = c.get(f"/lauf/{run_id}").text
-    assert "Keine Spekulation" in seite and "Keine Zusage vor Freigabe" in seite
+    assert "No speculation" in seite and "No promise before the decision" in seite
     c.__exit__(None, None, None)
 
 

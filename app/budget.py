@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 
 from uc4_agent.agent import MAX_BUDGET_USD
 
+from .darstellung import MONATE
 from .speicher import Speicher
 
 RESERVE_JE_LAUF_USD = MAX_BUDGET_USD
@@ -34,7 +35,7 @@ class BudgetStand:
     @property
     def naechster_monat(self) -> str:
         jahr, monat = map(int, self.monat.split("-"))
-        return f"01.{monat % 12 + 1:02d}.{jahr + (monat == 12)}"
+        return f"1 {MONATE[monat % 12]} {jahr + (monat == 12)}"
 
 
 def aktueller_monat(jetzt: datetime | None = None) -> str:

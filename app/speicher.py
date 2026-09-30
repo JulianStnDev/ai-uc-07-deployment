@@ -26,7 +26,8 @@ SCHEMA = [
         kosten_pauschal INTEGER NOT NULL DEFAULT 0, -- 1 = keine Kostenangabe, Deckel verbucht
         dauer_s         DOUBLE PRECISION,
         ergebnis        TEXT,                       -- JSON: Entwurf, Übergaben, Kündigungen, Turns, ...
-        ereignisse      TEXT                        -- JSON: alle Live-Ereignisse (Werkzeugaufrufe, Text)
+        ereignisse      TEXT,                       -- JSON: alle Live-Ereignisse (Werkzeugaufrufe, Text)
+        zugang          TEXT                        -- Code des persönlichen Links; NULL = Admin
     )""",
     """CREATE TABLE IF NOT EXISTS empfehlungen (
         empfehlungs_id  TEXT PRIMARY KEY,
@@ -64,7 +65,18 @@ SCHEMA = [
         entschieden     TEXT NOT NULL,
         notiz           TEXT NOT NULL DEFAULT ''    -- interne Notiz: nur Protokoll und Konsole, nie an ein Modell
     )""",
+    # Persönliche Links für Besucher. Bewusst nur Code, Zeitpunkt und Zähler, keine Angaben zur Person.
+    """CREATE TABLE IF NOT EXISTS zugangslinks (
+        code            TEXT PRIMARY KEY,           -- Pseudonym + Zufallszeichen, steht im Link (Parameter code); kein Fragezeichen im SQL (Platzhalter)
+        erstellt        TEXT NOT NULL,              -- gültig bis erstellt + LINK_GUELTIG
+        laeufe          INTEGER NOT NULL DEFAULT 0, -- gestartete Läufe (nie gestartete werden zurückgebucht)
+        gesperrt        INTEGER NOT NULL DEFAULT 0
+    )""",
 ]
+
+# Kontingent eines persönlichen Links (docs/decisions.md, 2026-09-30)
+LINK_LAEUFE = 5
+LINK_GUELTIG = timedelta(days=60)
 
 # Ein Lauf dauert typisch 30–45 s. Was nach 15 min noch "läuft", hat keinen Prozess mehr.
 VERWAIST_NACH = timedelta(minutes=15)
@@ -99,6 +111,8 @@ class _Sqlite:
                 x("ALTER TABLE laeufe ADD COLUMN titel TEXT")
             if "notiz" not in {r["name"] for r in x("PRAGMA table_info(freigaben)")}:  # Datenbank vor der Notiz
                 x("ALTER TABLE freigaben ADD COLUMN notiz TEXT NOT NULL DEFAULT ''")
+            if "zugang" not in {r["name"] for r in x("PRAGMA table_info(laeufe)")}:  # Datenbank vor den Links
+                x("ALTER TABLE laeufe ADD COLUMN zugang TEXT")
 
 
 class _Postgres:
@@ -124,6 +138,7 @@ class _Postgres:
             for s in SCHEMA:
                 x(s)
             x("ALTER TABLE freigaben ADD COLUMN IF NOT EXISTS notiz TEXT NOT NULL DEFAULT ''")  # Datenbank vor der Notiz
+            x("ALTER TABLE laeufe ADD COLUMN IF NOT EXISTS zugang TEXT")  # Datenbank vor den Links
 
     def schliessen(self):
         self.pool.close()
@@ -155,10 +170,10 @@ class Speicher:
     # ---------- Läufe ----------
 
     def lauf_anlegen(self, run_id: str, kunden_id: str, absender: str, text: str, titel: str | None = None,
-                     jetzt: datetime | None = None, status: str = "angelegt") -> None:
+                     jetzt: datetime | None = None, status: str = "angelegt", zugang: str | None = None) -> None:
         with self.backend.verbindung() as x:
-            x("INSERT INTO laeufe (run_id, erstellt, kunden_id, absender, text, titel, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-              (run_id, jetzt_iso(jetzt), kunden_id, absender, text, titel, status))
+            x("INSERT INTO laeufe (run_id, erstellt, kunden_id, absender, text, titel, status, zugang) "
+              "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (run_id, jetzt_iso(jetzt), kunden_id, absender, text, titel, status, zugang))
 
     def lauf_uebernehmen(self, run_id: str) -> bool:
         """Genau eine Anfrage darf einen angelegten Lauf starten, auch bei mehreren Instanzen.
@@ -169,6 +184,9 @@ class Speicher:
     def lauf_abschliessen(self, run_id: str, *, status: str, kosten_usd: float, kosten_pauschal: bool,
                           dauer_s: float, ergebnis: dict, ereignisse: list, empfehlungen: list[dict]) -> None:
         with self.backend.verbindung() as x:  # eine Transaktion: Lauf und Empfehlungen zusammen oder gar nicht
+            if status == "verfallen":  # nie gestartet: Der Besucher bekommt seinen Lauf zurück
+                x("UPDATE zugangslinks SET laeufe = laeufe - 1 WHERE laeufe > 0 AND code = "
+                  "(SELECT zugang FROM laeufe WHERE run_id=? AND status='angelegt')", (run_id,))
             x("UPDATE laeufe SET status=?, kosten_usd=?, kosten_pauschal=?, dauer_s=?, ergebnis=?, ereignisse=? WHERE run_id=?",
               (status, kosten_usd, int(kosten_pauschal), dauer_s,
                json.dumps(ergebnis, ensure_ascii=False), json.dumps(ereignisse, ensure_ascii=False), run_id))
@@ -196,6 +214,9 @@ class Speicher:
         - "angelegt", aber nie gestartet (Seite geschlossen, bevor sie zuhörte): verfallen, kostet nichts."""
         grenze = jetzt_iso((jetzt or datetime.now(timezone.utc)) - VERWAIST_NACH)
         with self.backend.verbindung() as x:
+            for r in x("SELECT zugang FROM laeufe WHERE status='angelegt' AND erstellt < ? AND zugang IS NOT NULL",
+                       (grenze,)).fetchall():  # nie gestartet: Lauf zurück aufs Kontingent
+                x("UPDATE zugangslinks SET laeufe = laeufe - 1 WHERE code=? AND laeufe > 0", (r["zugang"],))
             n = x("UPDATE laeufe SET status='abgebrochen', kosten_usd=?, kosten_pauschal=1 WHERE status='laeuft' AND erstellt < ?",
                   (pauschale_usd, grenze)).rowcount
             n += x("UPDATE laeufe SET status='verfallen', kosten_usd=0 WHERE status='angelegt' AND erstellt < ?", (grenze,)).rowcount
@@ -221,15 +242,22 @@ class Speicher:
 
     # ---------- Empfehlungen und Freigaben ----------
 
-    def offene_empfehlungen(self) -> list[dict]:
+    # Besucher mit persönlichem Link sehen nur Läufe mit ihrem Code. nur_zugang=None heißt: alle (Admin).
+    @staticmethod
+    def _filter(nur_zugang: str | None, verbinder: str = "AND") -> tuple[str, tuple]:
+        return (f" {verbinder} l.zugang = ?", (nur_zugang,)) if nur_zugang is not None else ("", ())
+
+    def offene_empfehlungen(self, nur_zugang: str | None = None) -> list[dict]:
+        f, p = self._filter(nur_zugang)
         return self._alle(
             "SELECT e.*, l.text AS ticket_text, l.titel FROM empfehlungen e JOIN laeufe l USING (run_id) "
-            "LEFT JOIN freigaben f USING (empfehlungs_id) WHERE f.empfehlungs_id IS NULL ORDER BY e.erstellt")
+            f"LEFT JOIN freigaben f USING (empfehlungs_id) WHERE f.empfehlungs_id IS NULL{f} ORDER BY e.erstellt", p)
 
-    def entschiedene_empfehlungen(self, limit: int = 20) -> list[dict]:
+    def entschiedene_empfehlungen(self, limit: int = 20, nur_zugang: str | None = None) -> list[dict]:
+        f, p = self._filter(nur_zugang, "WHERE")
         return self._alle(
             "SELECT e.*, f.entscheidung, f.kommentar, f.notiz, f.entschieden, l.titel FROM empfehlungen e JOIN laeufe l USING (run_id) "
-            "JOIN freigaben f USING (empfehlungs_id) ORDER BY f.entschieden DESC LIMIT ?", (limit,))
+            f"JOIN freigaben f USING (empfehlungs_id){f} ORDER BY f.entschieden DESC LIMIT ?", (*p, limit))
 
     def empfehlungen_zum_lauf(self, run_id: str) -> list[dict]:
         """Grundlage der endgültigen Antwort. Die interne Notiz fehlt hier absichtlich."""
@@ -249,12 +277,13 @@ class Speicher:
             return False
         return True
 
-    def uebergaben(self, limit: int = 20) -> list[dict]:
+    def uebergaben(self, limit: int = 20, nur_zugang: str | None = None) -> list[dict]:
         """Fälle, die der Agent an einen Menschen übergeben hat (aus dem Ergebnis der Läufe)."""
         faelle = []
+        f, p = self._filter(nur_zugang)
         # Muster als Parameter: Ein %-Zeichen direkt im SQL müsste man für Postgres verdoppeln.
-        for r in self._alle("SELECT run_id, erstellt, kunden_id, titel, ergebnis FROM laeufe "
-                            "WHERE ergebnis LIKE ? ORDER BY erstellt DESC LIMIT ?", ("%uebergabe_id%", limit)):
+        for r in self._alle("SELECT run_id, erstellt, kunden_id, titel, ergebnis FROM laeufe l "
+                            f"WHERE ergebnis LIKE ?{f} ORDER BY erstellt DESC LIMIT ?", ("%uebergabe_id%", *p, limit)):
             for u in json.loads(r["ergebnis"]).get("uebergaben", []):
                 faelle.append({"run_id": r["run_id"], "erstellt": r["erstellt"], "kunden_id": r["kunden_id"],
                                "titel": r["titel"], "grund": u["grund"], "prioritaet": u["prioritaet"]})
@@ -306,11 +335,43 @@ class Speicher:
         return self._alle("SELECT run_id, erstellt, kunden_id, titel, status, kosten_usd, kosten_pauschal, dauer_s "
                           "FROM laeufe ORDER BY erstellt DESC LIMIT ?", (limit,))
 
+    def laeufe_zum_zugang(self, code: str, limit: int = 20) -> list[dict]:
+        """Die eigenen Läufe eines Besuchers mit persönlichem Link (Startseite)."""
+        return self._alle("SELECT run_id, erstellt, kunden_id, titel, status FROM laeufe WHERE zugang=? "
+                          "ORDER BY erstellt DESC LIMIT ?", (code, limit))
+
     def antworten_kosten(self, monat: str) -> float:
         return float(self._eins("SELECT COALESCE(SUM(kosten_usd), 0) AS s FROM antworten WHERE substr(erstellt, 1, 7)=?",
                                 (monat,))["s"])
 
-    def freigabe_statistik(self) -> dict:
+    def freigabe_statistik(self, nur_zugang: str | None = None) -> dict:
+        f, p = self._filter(nur_zugang, "WHERE")
         r = self._eins("SELECT COUNT(*) AS gesamt, "
-                       "COALESCE(SUM(CASE WHEN entscheidung='bestaetigt' THEN 1 ELSE 0 END), 0) AS bestaetigt FROM freigaben")
+                       "COALESCE(SUM(CASE WHEN entscheidung='bestaetigt' THEN 1 ELSE 0 END), 0) AS bestaetigt FROM freigaben "
+                       f"JOIN empfehlungen USING (empfehlungs_id) JOIN laeufe l USING (run_id){f}", p)
         return {"gesamt": int(r["gesamt"]), "bestaetigt": int(r["bestaetigt"])}
+
+    # ---------- Persönliche Links ----------
+
+    def link_anlegen(self, code: str, jetzt: datetime | None = None) -> None:
+        with self.backend.verbindung() as x:
+            x("INSERT INTO zugangslinks (code, erstellt) VALUES (?, ?)", (code, jetzt_iso(jetzt)))
+
+    def link(self, code: str) -> dict | None:
+        return self._eins("SELECT * FROM zugangslinks WHERE code=?", (code,))
+
+    def links(self) -> list[dict]:
+        return self._alle("SELECT * FROM zugangslinks ORDER BY erstellt DESC")
+
+    def link_sperren(self, code: str) -> bool:
+        with self.backend.verbindung() as x:
+            return x("UPDATE zugangslinks SET gesperrt=1 WHERE code=?", (code,)).rowcount == 1
+
+    def link_lauf_buchen(self, code: str, jetzt: datetime | None = None) -> bool:
+        """Zählt einen Lauf aufs Kontingent. Atomar: Das UPDATE greift nur, solange ein Lauf frei ist, der Link
+        noch gilt und nicht gesperrt ist. Gleichzeitige Anfragen (auch auf zwei Instanzen) überziehen nicht."""
+        frueheste = jetzt_iso((jetzt or datetime.now(timezone.utc)) - LINK_GUELTIG)
+        with self.backend.verbindung() as x:
+            return x("UPDATE zugangslinks SET laeufe = laeufe + 1 "
+                     "WHERE code=? AND laeufe < ? AND gesperrt=0 AND erstellt > ?",
+                     (code, LINK_LAEUFE, frueheste)).rowcount == 1

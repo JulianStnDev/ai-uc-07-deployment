@@ -1,0 +1,14 @@
+{# Nur in der Aufzeichnung: die Entscheidung, die ein Mensch in der Support-Konsole getroffen hat. Ohne interne Notiz. #}
+{% for e in konsole %}
+{% set z = zahlungen.get(e.zahlungs_id) %}
+<div class="ergebnis-liste replay-konsole">
+  <h3><span aria-hidden="true">🧑‍💼</span> Support console: a human decided {{ info("freigabe", "Support console") }}</h3>
+  <dl class="fall-fakten">
+    <dt>Recommendation</dt><dd>{{ e.betrag_usd | usd }}{% if z %} for payment {{ z.zahlungs_id }} ({{ z.datum | datum }}){% endif %}</dd>
+    <dt>Agent's reason</dt><dd lang="de">{{ e.begruendung }}</dd>
+    <dt>Decision</dt><dd>{% if e.entscheidung == "bestaetigt" %}<span class="badge bestaetigt">confirmed</span>{% else %}<span class="badge abgelehnt">rejected</span>{% endif %}
+      {{ e.entschieden | datum }} UTC</dd>
+    {% if e.kommentar %}<dt>Reason for the customer</dt><dd lang="de">{{ e.kommentar }}</dd>{% endif %}
+  </dl>
+</div>
+{% endfor %}
