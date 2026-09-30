@@ -37,8 +37,10 @@ def usd(betrag: float | None) -> str:
     return f"{betrag:,.2f} USD"
 
 
-def usd_de(betrag: float) -> str:
-    """Deutsches Format für das Kundengespräch und die Eingaben der Modelle (unverändert seit UC7 Branch d)."""
+def usd_de(betrag: float | None) -> str:
+    """Deutsches Format für Kundengespräch, Modell-Eingaben (unverändert seit UC7 Branch d) und Betriebsseite."""
+    if betrag is None:
+        return "–"
     return f"{betrag:,.2f} USD".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
@@ -52,6 +54,14 @@ def datum(iso: str | None) -> str:
         return "–"
     j, m, t = iso[:10].split("-")
     return f"{int(t)} {MONATE[int(m) - 1]} {j}" + (f", {iso[11:16]}" if len(iso) > 10 else "")
+
+
+def datum_de(iso: str | None) -> str:
+    """Deutsches Datum für die Betriebsseite (nur Admin, bleibt deutsch), z. B. "28.09.2026 19:09"."""
+    if not iso:
+        return "–"
+    j, m, t = iso[:10].split("-")
+    return f"{t}.{m}.{j}" + (f" {iso[11:16]}" if len(iso) > 10 else "")
 
 
 def abo_text(kunde: dict) -> str:

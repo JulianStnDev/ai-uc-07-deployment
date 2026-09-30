@@ -86,7 +86,7 @@ Details: [evals/results.md](evals/results.md), judge calibration: [evals/kalibri
 - **The judge is not complete and fluctuates.** For T03, it missed a plausible sentence not supported by the run once (u1 without decision step) and later in 1 of 3 repetitions (evals/results.md).
 - **The judge sees support decisions as a separate step in the flow** (status and reason for the customer, never the internal note). The judge prompt remains u1. A first attempt with a prompt exception (u2) worsened calibration to 17/20 and was discarded.
 
-- **The interface is English, the customer conversation German.** FocusFlow's customers and the UC4 agent (prompt v3, evals) are German. Translating them would change the agent and invalidate the evals. The pages say so. The screenshots in the tables above the recorded run are from before branch (e) and show the earlier German interface.
+- **The interface is English, the customer conversation German.** FocusFlow's customers and the UC4 agent (prompt v3, evals) are German. Translating them would change the agent and invalidate the evals. The pages say so.
 - **A personal link is a bearer token.** Whoever has the link has the access (5 runs at most). Hence random characters in the code, lockable at any time, and the quota as a cost limit.
 
 ## Learnings

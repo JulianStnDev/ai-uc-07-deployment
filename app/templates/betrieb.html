@@ -16,8 +16,8 @@
 <div class="kacheln">
   <div class="karte kachel"><div class="titel">Läufe im Monat</div><div class="wert">{{ d.anzahl }}</div>
     <div class="unter">{{ d.fertig }} fertig · {{ d.abgebrochen }} abgebrochen · {{ d.verfallen }} nicht gestartet</div></div>
-  <div class="karte kachel"><div class="titel">Kosten gesamt {{ info("budget", "Budget") }}</div><div class="wert">{{ d.kosten_gesamt | usd }}</div>
-    <div class="unter">von {{ budget.deckel_usd | usd }} · Agent {{ d.kosten_agent | usd }} · Prüfung {{ d.kosten_pruefung | usd }} · Antworten {{ d.kosten_antwort | usd }}</div></div>
+  <div class="karte kachel"><div class="titel">Kosten gesamt {{ info("budget", "Budget") }}</div><div class="wert">{{ d.kosten_gesamt | usd_de }}</div>
+    <div class="unter">von {{ budget.deckel_usd | usd_de }} · Agent {{ d.kosten_agent | usd_de }} · Prüfung {{ d.kosten_pruefung | usd_de }} · Antworten {{ d.kosten_antwort | usd_de }}</div></div>
   <div class="karte kachel"><div class="titel">Kosten je Lauf {{ info("kosten", "Kosten") }}</div><div class="wert">{{ usd4(d.kosten_je_lauf) }}</div>
     <div class="unter">Mittel der fertigen Läufe</div></div>
   <div class="karte kachel"><div class="titel">Dauer</div><div class="wert">{{ sek(d.dauer_p50) }}</div>
@@ -31,16 +31,16 @@
 <div class="karte">
   <ol class="saeulen" aria-label="Läufe pro Tag, letzte 14 Tage">
     {% for t in d.tage %}
-    <li class="saeule" tabindex="0" aria-label="{{ t.tag | datum }}: {{ t.anzahl }} Läufe{% if t.fehler %}, davon {{ t.fehler }} mit Fehler{% endif %}">
+    <li class="saeule" tabindex="0" aria-label="{{ t.tag | datum_de }}: {{ t.anzahl }} Läufe{% if t.fehler %}, davon {{ t.fehler }} mit Fehler{% endif %}">
       {% if t.anzahl %}<span class="balken" style="height: {{ (100 * t.anzahl / d.max_tag) | round(1) }}%"></span>{% endif %}
-      <span class="tipp" aria-hidden="true">{{ t.tag | datum }} · {{ t.anzahl }} Läufe{% if t.fehler %} · {{ t.fehler }} Fehler{% endif %}</span>
+      <span class="tipp" aria-hidden="true">{{ t.tag | datum_de }} · {{ t.anzahl }} Läufe{% if t.fehler %} · {{ t.fehler }} Fehler{% endif %}</span>
     </li>
     {% endfor %}
   </ol>
   <div class="achse" aria-hidden="true">{% for t in d.tage %}<span>{{ t.tag[8:10] }}.{{ t.tag[5:7] }}.</span>{% endfor %}</div>
   <details class="roh" style="margin-top: 12px;"><summary>Als Tabelle</summary>
     <table class="tabelle"><thead><tr><th>Tag</th><th>Läufe</th><th>mit Fehler</th></tr></thead><tbody>
-    {% for t in d.tage | reverse %}<tr><td>{{ t.tag | datum }}</td><td>{{ t.anzahl }}</td><td>{{ t.fehler }}</td></tr>{% endfor %}
+    {% for t in d.tage | reverse %}<tr><td>{{ t.tag | datum_de }}</td><td>{{ t.anzahl }}</td><td>{{ t.fehler }}</td></tr>{% endfor %}
     </tbody></table></details>
 </div>
 
@@ -58,7 +58,7 @@
       <strong>{{ r.ok }} / {{ r.gesamt }}</strong>
       <div class="anteil-balken" aria-hidden="true"><span style="width: {{ (100 * r.ok / r.gesamt) | round(1) if r.gesamt else 0 }}%"></span></div></div>
     {% endfor %}
-    <p class="sehr-leise" style="margin-top: 8px;">{{ d.urteile }} Urteile · Kosten im Monat {{ d.kosten_pruefung | usd }} von höchstens {{ judge_deckel | usd }}</p>
+    <p class="sehr-leise" style="margin-top: 8px;">{{ d.urteile }} Urteile · Kosten im Monat {{ d.kosten_pruefung | usd_de }} von höchstens {{ judge_deckel | usd_de }}</p>
   </div>
 </div>
 
@@ -69,7 +69,7 @@
     <tbody>
     {% for l in d.letzte %}
     <tr id="lauf-{{ l.run_id }}">
-      <td>{{ l.erstellt | datum }}</td>
+      <td>{{ l.erstellt | datum_de }}</td>
       <td><a href="/lauf/{{ l.run_id }}">{{ l.titel or "Anliegen" }}</a><div class="sehr-leise">{{ kunden[l.kunden_id].name }}</div></td>
       <td>{% if l.status == "fertig" %}<span class="badge bestaetigt">fertig</span>{% elif l.status in ("angelegt", "laeuft") %}<span class="badge neutral">läuft</span>{% elif l.status == "verfallen" %}<span class="badge neutral">nicht gestartet</span>{% else %}<span class="badge abgelehnt">{{ l.status }}</span>{% endif %}</td>
       <td>{{ usd4(l.kosten_usd) }}</td>
