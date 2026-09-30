@@ -7,6 +7,7 @@ Die SQL-Befehle sind für beide gleich geschrieben (Platzhalter `?`, wird für P
 """
 
 import json
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -73,6 +74,9 @@ SCHEMA = [
         gesperrt        INTEGER NOT NULL DEFAULT 0
     )""",
 ]
+TABELLEN = {re.search(r"CREATE TABLE IF NOT EXISTS (\w+)", s).group(1) for s in SCHEMA}
+# Spalten, die per ALTER TABLE nachgerüstet werden (ältere Datenbanken)
+NACHGERUESTET = {("freigaben", "notiz"), ("laeufe", "zugang")}
 
 # Kontingent eines persönlichen Links (docs/decisions.md, 2026-09-30)
 LINK_LAEUFE = 5
@@ -135,6 +139,12 @@ class _Postgres:
 
     def einrichten(self):
         with self.verbindung() as x:
+            # Die App-Rolle uc7_app darf nur Zeilen lesen und schreiben, kein DDL (docs/decisions.md, 2026-09-30).
+            # Ist das Schema vollständig, bleibt es beim Start unberührt. Sonst einmal mit dem Owner starten.
+            vorhanden = {(r["table_name"], r["column_name"]) for r in x(
+                "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = current_schema()")}
+            if {t for t, _ in vorhanden} >= TABELLEN and vorhanden >= NACHGERUESTET:
+                return
             for s in SCHEMA:
                 x(s)
             x("ALTER TABLE freigaben ADD COLUMN IF NOT EXISTS notiz TEXT NOT NULL DEFAULT ''")  # Datenbank vor der Notiz

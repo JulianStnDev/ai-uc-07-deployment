@@ -151,3 +151,15 @@ Entscheidungen:
 Kosten: Bauen und Kontrolle 0 USD API. Je voll genutztem Link ca. 0,17 USD (5 × 34,1 USD/1000). Aufzeichnung: keine API-Kosten, keine Datenbankabfragen.
 
 Gefunden vor dem Deploy: Ein `?` im SQL-Kommentar der neuen Tabelle wurde für Postgres zum Platzhalter. Die App wäre auf Neon beim Start abgestürzt, alle SQLite-Tests waren grün. Jetzt prüft ein Test, dass das Schema kein `?` enthält.
+
+## 2026-09-30: Eigene Datenbankrolle `uc7_app` statt Neon-Owner
+
+Kontext: `DATABASE_URL` enthielt bisher den Owner-Zugang des Neon-Projekts (`neondb_owner`). Der wurde offengelegt und wird zurückgesetzt. Ohnehin durfte die App damit viel mehr als nötig: Rollen anlegen, alle Datenbanken des Projekts lesen und ändern, auch die aus UC5 (`analytics`, `uc5_app`), Tabellen löschen. Ein Leck der Cloud-Run-Umgebung wäre ein Leck des ganzen Projekts gewesen. Das UC5-Learning gilt hier genauso: Rechte an der Datenbank begrenzen, nicht an der Disziplin des Codes.
+
+Entscheidung: eigene Login-Rolle `uc7_app`, nur für `neondb`. Rechte genau nach den SQL-Befehlen der App (`app/speicher.py`): `SELECT, INSERT, UPDATE` auf die sechs Tabellen, `DELETE` nur auf `pruefungen` (Prüfung wird überschrieben). Kein DDL, kein `TRUNCATE`, kein Zugriff auf andere Datenbanken. Die Tabellen gehören weiter dem Owner, `uc7_app` kann sie also nicht löschen oder ändern.
+
+Folge im Code: Die App legte beim Start per `CREATE TABLE IF NOT EXISTS` und `ALTER TABLE … ADD COLUMN IF NOT EXISTS` ihr Schema an. Postgres prüft dabei das Recht auf das Schema auch dann, wenn die Tabelle existiert. Mit `uc7_app` brach der Start mit „permission denied for schema public“ ab. Jetzt prüft der Postgres-Start über `information_schema.columns`, ob alle Tabellen und nachgerüsteten Spalten vorhanden sind, und führt nur dann DDL aus, wenn etwas fehlt. Schemaänderungen laufen damit einmalig mit dem Owner (docs/deploy.md). Verworfen: `uc7_app` zum Eigentümer der Tabellen machen. Dann dürfte die App sie auch löschen, und `CREATE TABLE IF NOT EXISTS` bräuchte trotzdem `CREATE` auf das Schema.
+
+Geprüft auf Neon mit `uc7_app`: Start der App ohne DDL, Lesen, Einfügen und Ändern (im Rollback), `DELETE` auf `pruefungen`. Verweigert: `DELETE` auf `laeufe`, `TRUNCATE`, `DROP TABLE`, `ALTER TABLE`, `CREATE TABLE`, `CREATE SCHEMA`, `CREATE ROLE`, Verbindung zu `analytics` und `uc5_app`. Secret `uc7-database-url` Version 2, Revision `uc7-00008`: Health, Aufzeichnung ohne Login, Admin-Login, Betriebsseite (Läufe aus Neon), Konsole ok. Lokale `.env` und `python -m app.links` nutzen dieselbe Rolle. Kein API-Lauf, keine Kosten.
+
+Offen: Die interne Datenbank `postgres` erlaubt wie bei Neon üblich jeder Rolle `CONNECT` (dort liegt nichts von UC7 oder UC5).
