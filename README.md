@@ -1,86 +1,88 @@
-# UC7 — Deployment: Der Support-Agent als Web-Demo
+🇩🇪 [Deutsche Version](README_DE.md)
 
-> Stand: online auf Cloud Run in Frankfurt (https://uc7-807149335205.europe-west3.run.app, Zugang nur mit Zugangscode), Protokoll in Neon Postgres (Frankfurt), Betriebsseite mit Kosten, Latenz und Stichproben-Judge. Deploy-Anleitung: [docs/deploy.md](docs/deploy.md).
+# UC7 — Deployment: The Support Agent as a Web Demo
 
-| Anliegen mit Ergebnis | Support-Konsole |
+> Status: online on Cloud Run in Frankfurt (https://uc7-807149335205.europe-west3.run.app, access only with an access code), log in Neon Postgres (Frankfurt), operations page with cost, latency and sample judge. Deployment guide: [docs/deploy.md](docs/deploy.md).
+
+| Request with result | Support console |
 |---|---|
 | ![Anliegen](docs/screenshots/app/lauf-ergebnis-desktop.png) | ![Konsole](docs/screenshots/app/konsole-desktop.png) |
 
-| Zwischenbescheid (Variante A) | Betriebsseite |
+| Interim notice (Variant A) | Operations page |
 |---|---|
 | ![Zwischenbescheid](docs/screenshots/betrieb/1-zwischenbescheid.png) | ![Betrieb](docs/screenshots/betrieb/4-betrieb.png) |
 
 ## Problem
-Der Support-Agent aus UC4 (Claude Agent SDK, Haiku 4.5, eigener MCP-Server) lief bisher nur als Skript. UC7 bringt ihn als Web-Demo online: Besucher mit Zugangscode schicken Tickets, sehen live, welche Werkzeuge der Agent aufruft, und ein Mensch entscheidet auf einer Freigabe-Seite über Erstattungsempfehlungen. Diese Entscheidungen sind die Datenbasis für die spätere Frage, ob Erstattungen autonom werden dürfen.
+The support agent from UC4 (Claude Agent SDK, Haiku 4.5, own MCP server) previously only ran as a script. UC7 puts it online as a web demo: visitors with an access code submit tickets, see live which tools the agent calls, and a human decides on refund recommendations on an approval page. These decisions are the data basis for the later question of whether refunds may become autonomous.
 
-## PM-Entscheidung
-Siehe [docs/plan.md](docs/plan.md) (Hosting-Recherche mit Quellen) und [docs/decisions.md](docs/decisions.md). Kurz: Google Cloud Run in Frankfurt, Protokoll in Neon Postgres, Web-Framework FastAPI + Jinja2 + htmx mit Server-Sent Events. Harte Budgetgrenze 5 USD API-Kosten im Monat, in der App erzwungen (Deckel 4,50 USD plus 0,50 USD Reserve je laufendem Ticket).
+## PM Decision
+See [docs/plan.md](docs/plan.md) (hosting research with sources) and [docs/decisions.md](docs/decisions.md). In short: Google Cloud Run in Frankfurt, log in Neon Postgres, web framework FastAPI + Jinja2 + htmx with Server-Sent Events. Hard budget limit of 5 USD API cost per month, enforced in the app (cap of 4.50 USD plus 0.50 USD reserve per running ticket).
 
-Branch (c): Agent-Entwürfe sagten Erstattungen zu, bevor ein Mensch entschieden hatte (Judge: 4 von 5 Entwürfen mit Empfehlung). Deshalb **Variante A**: Der Kunde sieht erst einen festen Zwischenbescheid, die endgültige Antwort schreibt Haiku 4.5 nach der Freigabe. In der Konsole gibt es dafür „Begründung für den Kunden“ (geht in die Antwort) und „Interne Notiz“ (geht nie an ein Modell). Qualität misst ein **Judge mit Sonnet 5 auf 20 % der Läufe**, kalibriert gegen UC4 und eine Handprüfung (20/20, Haiku 15/20).
+Branch (c): agent drafts promised refunds before a human had decided (judge: 4 of 5 drafts with a recommendation). Hence **Variant A**: the customer first sees a fixed interim notice; the final answer is written by Haiku 4.5 after approval. For this, the console has "Begründung für den Kunden" (reason for the customer; goes into the answer) and "Interne Notiz" (internal note; never goes to a model). Quality is measured by a **judge with Sonnet 5 on 20% of runs**, calibrated against UC4 and a manual review (20/20, Haiku 15/20).
 
-## Architekturskizze
+## Architecture Sketch
 ```
-Browser ──POST /lauf──▶ FastAPI ──asyncio-Task──▶ uc4_agent (Agent SDK ─▶ gebündelte Claude-CLI ─▶ Haiku 4.5)
-   ▲                       │                              │ Werkzeugaufrufe (MCP in-process)
-   └──── SSE /lauf/{id}/stream ◀── Beobachter ◀───────────┘
+Browser ──POST /lauf──▶ FastAPI ──asyncio task──▶ uc4_agent (Agent SDK ─▶ bundled Claude CLI ─▶ Haiku 4.5)
+   ▲                       │                              │ tool calls (MCP in-process)
+   └──── SSE /lauf/{id}/stream ◀── observer ◀─────────────┘
                            │
-                           └──▶ Neon Postgres (lokal ohne DATABASE_URL: SQLite): Läufe, Kosten, Empfehlungen, Freigaben
+                           └──▶ Neon Postgres (locally without DATABASE_URL: SQLite): runs, cost, recommendations, approvals
 ```
-- `uc4_agent/`: Kopie des UC4-Agents (Prompt v3, Stop-Hook, Autonomie-Matrix unverändert), Herkunft in `uc4_agent/HERKUNFT.md`.
-- `app/`: Web-App. `lauf.py` führt ein Anliegen aus, `budget.py` rechnet den Monatsdeckel, `speicher.py` ist das Protokoll, `main.py` die Routen, `darstellung.py` die Texte der Zeitleiste, `hinweise.py` die Info-Hinweise und die Titelregel, `pruefung.py` Regeln und Judge, `antwort.py` Zwischenbescheid und endgültige Antwort.
-- Seiten: `/` Start, `/anliegen` Kundenportal, `/lauf/{id}` Portal + „Hinter den Kulissen“ (live per SSE), `/freigaben` Support-Konsole, `/betrieb` Kosten, Latenz, Fehler, Regeln und Judge.
+- `uc4_agent/`: copy of the UC4 agent (prompt v3, stop hook, autonomy matrix unchanged), provenance in `uc4_agent/HERKUNFT.md`.
+- `app/`: web app. `lauf.py` executes a request, `budget.py` computes the monthly cap, `speicher.py` is the log, `main.py` the routes, `darstellung.py` the texts of the timeline, `hinweise.py` the info hints and the title rule, `pruefung.py` rules and judge, `antwort.py` interim notice and final answer.
+- Pages: `/` start, `/anliegen` customer portal, `/lauf/{id}` portal + "Hinter den Kulissen" (behind the scenes; live via SSE), `/freigaben` support console, `/betrieb` cost, latency, errors, rules and judge.
 
-## Lokal starten
+## Running Locally
 
-Voraussetzung: Python 3.10+ oder Docker. `.env.example` nach `.env` kopieren und ausfüllen (API-Key, Zugangscode, Session-Secret).
+Prerequisite: Python 3.10+ or Docker. Copy `.env.example` to `.env` and fill it in (API key, access code, session secret).
 
 ```bash
-# ohne Docker
+# without Docker
 python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/uvicorn --factory app.main:create_app --reload
 # → http://localhost:8000
 
-# mit Docker (auf dem Mac z. B. mit Colima: brew install colima docker && colima start)
+# with Docker (on the Mac e.g. with Colima: brew install colima docker && colima start)
 docker build -t uc7-web .
 docker run --rm -p 8080:8080 --memory 1g --cpus 1 --env-file .env -v uc7-daten:/daten uc7-web
 # → http://localhost:8080
 
-# Tests ohne LLM (kosten nichts)
+# tests without LLM (cost nothing)
 .venv/bin/python -m pytest
 ```
 
-Jedes Ticket kostet echtes Geld (ca. 0,03 USD, höchstens 0,50 USD).
+Every ticket costs real money (approx. 0.03 USD, at most 0.50 USD).
 
-## Evaluationsergebnisse
-Details: [evals/results.md](evals/results.md), Judge-Kalibrierung: [evals/kalibrierung.md](evals/kalibrierung.md).
+## Evaluation Results
+Details: [evals/results.md](evals/results.md), judge calibration: [evals/kalibrierung.md](evals/kalibrierung.md).
 
-- Judge u1 (Sonnet 5) auf echten Anfragen: keine Spekulation 3/4, keine Zusage 4/4. Die eine Abweichung wertet eine vom Mitarbeiter gegebene Begründung als unbelegt, das Kriterium ist dafür zu eng (siehe results.md). Regelprüfungen ohne LLM: 5 Regeln, alle Läufe erfüllt.
-- Variante A über die öffentliche URL geprüft: Bestätigung, Ablehnung, Fall ohne Empfehlung.
-- Kontrolllauf T03 mit Ablehnung (2026-09-29): Die Begründung für den Kunden steht sinngemäß in der Antwort. Die interne Notiz erscheint nirgends beim Kunden, nur in der Konsole.
-- Kaltstart (5 Messungen + 1 Agent-Lauf, jeweils per Log bestätigt): Seite kalt Median 3,4 s (2,3–5,5 s), warm 0,03 s. Agent-Lauf aus dem Kaltstart: erster Schritt nach 9,8 s (warm 8,1 s).
-- Die Stichprobe ist klein (7 Läufe im Betrieb). Das ist ein Betriebsnachweis, die Qualitätsaussage zum Agent stammt aus UC4 (45 Läufe).
+- Judge u1 (Sonnet 5) on real requests: no speculation 3/4, no promise 4/4. The one deviation rates a reason given by the employee as unsupported; the criterion is too narrow for that (see results.md). Rule checks without LLM: 5 rules, all runs passed.
+- Variant A checked via the public URL: approval, rejection, case without recommendation.
+- Control run T03 with rejection (2026-09-29): the reason for the customer appears in substance in the answer. The internal note appears nowhere on the customer side, only in the console.
+- Cold start (5 measurements + 1 agent run, each confirmed via log): page cold median 3.4 s (2.3–5.5 s), warm 0.03 s. Agent run from cold start: first step after 9.8 s (warm 8.1 s).
+- The sample is small (7 runs in operation). This is proof of operation; the quality statement on the agent comes from UC4 (45 runs).
 
-## Kosten & Latenz
-- **Kosten pro 1000 Requests: 34,1 USD** (Agent, Judge-Stichprobe und endgültige Antworten zusammen, 8 Läufe auf Cloud Run). Cloud Run selbst lag im Freikontingent.
-- **p95-Latenz: 39,7 s** (Median 20,0 s, n = 8, p95 entspricht hier dem längsten Lauf). Kaltstart kostet zusätzlich ca. 3 s.
-- **Qualitätsmetrik: Judge-Quote keine Spekulation 3/4, keine Zusage 4/4.** Der eine Verstoß ist ein Messfehler des Kriteriums, nicht der Antwort. Der Judge stimmt in der Kalibrierung zu 20/20 mit der Handprüfung überein.
-- Kosten UC7 insgesamt für Test- und Messläufe: 0,98 USD.
+## Cost & Latency
+- **Cost per 1000 requests: 34.1 USD** (agent, judge sample and final answers combined, 8 runs on Cloud Run). Cloud Run itself stayed within the free tier.
+- **p95 latency: 39.7 s** (median 20.0 s, n = 8, p95 here equals the longest run). Cold start adds approx. 3 s.
+- **Quality metric: judge rate no speculation 3/4, no promise 4/4.** The one violation is a measurement error of the criterion, not of the answer. In calibration, the judge agrees 20/20 with the manual review.
+- Total UC7 cost for test and measurement runs: 0.98 USD.
 
-## Bekannte Grenzen
-- **Die endgültige Antwort liest kein Mensch, nur die Entscheidung.** Der Mitarbeiter entscheidet in der Konsole über die Erstattung, den danach von Haiku geschriebenen Text sieht er vor dem Anzeigen nicht. Deshalb steht im Portal „Vom Support entschieden“ und nicht „freigegeben“. Für die Demo ist das bewusst akzeptiert. Überwacht wird es über die Judge-Stichprobe (20 %). Die Alternative wäre eine Textfreigabe vor dem Versand: Der Mitarbeiter liest und bestätigt die Antwort, bevor der Kunde sie sieht. Das kostet einen weiteren Klick je Fall und verzögert die Antwort.
-- **Der Judge ist nicht vollständig und schwankt.** Bei T03 übersah er einen plausiblen, aber aus dem Lauf nicht belegten Satz einmal (u1 ohne Entscheidungsschritt) und später in 1 von 3 Wiederholungen (evals/results.md).
-- **Support-Entscheidungen sieht der Judge als eigenen Schritt im Ablauf** (Status und Begründung für den Kunden, nie die interne Notiz). Der Judge-Prompt bleibt u1. Ein erster Versuch mit einer Prompt-Ausnahme (u2) verschlechterte die Kalibrierung auf 17/20 und wurde verworfen.
+## Known Limitations
+- **No human reads the final answer, only the decision.** The employee decides on the refund in the console, but does not see the text Haiku writes afterwards before it is displayed. That is why the portal says "Vom Support entschieden" (decided by support) and not "freigegeben" (approved). For the demo, this is deliberately accepted. It is monitored via the judge sample (20%). The alternative would be a text approval before sending: the employee reads and confirms the answer before the customer sees it. That costs one more click per case and delays the answer.
+- **The judge is not complete and fluctuates.** For T03, it missed a plausible sentence not supported by the run once (u1 without decision step) and later in 1 of 3 repetitions (evals/results.md).
+- **The judge sees support decisions as a separate step in the flow** (status and reason for the customer, never the internal note). The judge prompt remains u1. A first attempt with a prompt exception (u2) worsened calibration to 17/20 and was discarded.
 
 ## Learnings
-- **Was immer gelten muss, gehört in den Code (aus UC4 bestätigt).** Prompt v3 verbietet Zusagen, trotzdem sagten 4 von 5 Entwürfen Erstattungen zu. Erst Variante A löst das strukturell.
-- **Ein Kommentarfeld für zwei Zwecke ist eine Datenschutzlücke.** Was intern gemeint war, wäre zum Kunden gelangt. Die Trennung ist per Test belegt: Der Test schneidet den kompletten API-Aufruf mit.
-- **Kalibrieren vor dem Kostensparen.** Haiku als Judge wäre 3,6-mal billiger, aber bei Spekulation zu nachsichtig (15/20 gegen 20/20).
-- **Messwerkzeuge brauchen selbst eine Gegenprobe.** Das Kaltstart-Skript zählte leere Monitoring-Daten als Leerlauf und suchte den Instanzstart im falschen Zeitfenster. Erst beim Abgleich mit den Logs fiel das auf.
-- **Abrechnung pro Instanz ist für Agents Pflicht:** Nur so läuft ein Lauf zu Ende, wenn der Tab geschlossen wird. Bei min. 0 Instanzen kostet das im Leerlauf nichts.
+- **What must always hold belongs in the code (confirmed from UC4).** Prompt v3 forbids promises, yet 4 of 5 drafts promised refunds. Only Variant A solves this structurally.
+- **One comment field for two purposes is a privacy gap.** What was meant internally would have reached the customer. The separation is proven by a test: the test captures the complete API call.
+- **Calibrate before cutting costs.** Haiku as judge would be 3.6 times cheaper, but too lenient on speculation (15/20 vs. 20/20).
+- **Measurement tools need a cross-check themselves.** The cold-start script counted empty monitoring data as idle time and looked for the instance start in the wrong time window. This only surfaced when comparing with the logs.
+- **Instance-based billing is a must for agents:** only then does a run finish when the tab is closed. With min. 0 instances, this costs nothing when idle.
 
-## Was ich anders machen würde
-- Die Kundenantwort von Anfang an vom Agent-Entwurf trennen (Variante A gleich in Branch (a)), statt Entwürfe mit Zusagen erst anzuzeigen.
-- Konsolenfelder nach Empfänger benennen („für den Kunden“, „intern“), nicht nach Form („Kommentar“).
-- Messskripte zuerst mit einer einzelnen Messung gegen die Logs prüfen, bevor sie zwei Stunden laufen.
-- Den Judge von Anfang an mit dem Fall „Mensch liefert den Grund“ kalibrieren. Kriterium u1 zählt nur Werkzeugaufrufe als Beleg und straft so eine korrekt übernommene Begründung ab. Nächster Schritt wäre u2.
-- Den Hinweis „Entwurf“ über der endgültigen Antwort nach der Freigabe ausblenden.
+## What I Would Do Differently
+- Separate the customer answer from the agent draft from the start (Variant A right away in branch (a)), instead of first showing drafts with promises.
+- Name console fields by recipient ("for the customer", "internal"), not by form ("comment").
+- Check measurement scripts first with a single measurement against the logs before they run for two hours.
+- Calibrate the judge from the start with the case "human provides the reason". Criterion u1 only counts tool calls as evidence and thus penalizes a correctly adopted reason. The next step would be u2.
+- Hide the "Entwurf" (draft) label above the final answer after approval.
