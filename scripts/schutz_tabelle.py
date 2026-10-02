@@ -42,7 +42,8 @@ def fall_ausfuehren(absender: str, werkzeug: str, eingabe: dict, runs_dir: Path)
     antwort = asyncio.run(pre_tool_hook(kasten)({"tool_name": agent.PREFIX + werkzeug, "tool_input": eingabe}, None, None))
     out = antwort["hookSpecificOutput"]
     if out["permissionDecision"] == "deny":
-        return "hook", out["permissionDecisionReason"]
+        letzter = json.loads((kasten.run_dir / "trajektorie.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+        return ("hook" if letzter.get("blockiert") else "hinweis"), out["permissionDecisionReason"]
     ergebnis, fehler = kasten.aufrufen(werkzeug, dict(eingabe))
     if fehler:
         return "werkzeug", ergebnis["fehler"]
