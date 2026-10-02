@@ -90,6 +90,11 @@ class WebKasten(Werkzeugkasten):
                       "ergebnis": ergebnis, "fehler": fehler, "blockiert": False})
         return ergebnis, fehler
 
+    def hinweis_protokollieren(self, werkzeug: str, eingabe: dict, text: str, art: str) -> None:
+        super().hinweis_protokollieren(werkzeug, eingabe, text, art)
+        self._melden({"art": "werkzeug", "werkzeug": werkzeug, "eingabe": eingabe,
+                      "ergebnis": {"fehler": text}, "fehler": True, "blockiert": False, "hinweis": art})
+
     def blockiert_protokollieren(self, werkzeug: str, eingabe: dict, grund: str, art: str = "werkzeug") -> None:
         super().blockiert_protokollieren(werkzeug, eingabe, grund, art)
         self._melden({"art": "werkzeug", "werkzeug": werkzeug, "eingabe": eingabe,

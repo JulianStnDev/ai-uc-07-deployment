@@ -133,6 +133,11 @@ def konto_hook(kasten: Werkzeugkasten):
         name = input_data.get("tool_name", "")
         werkzeug = name[len(PREFIX):] if name.startswith(PREFIX) else name
         eingabe = input_data.get("tool_input", {}) or {}
+        hinweis = kasten.konto_hinweis(werkzeug, eingabe)
+        if hinweis is not None:  # eigene E-Mail statt Kunden-ID: Werkzeugfehler mit Hinweis, keine Konto-Blockade
+            kasten.hinweis_protokollieren(werkzeug, eingabe, hinweis, "email_statt_kunden_id")
+            return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                           "permissionDecisionReason": hinweis}}
         grund = kasten.konto_pruefen(werkzeug, eingabe)
         if grund is None:
             return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}

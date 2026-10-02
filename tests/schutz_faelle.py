@@ -2,7 +2,8 @@
 erzeugen würde, plus die eigenen Aufrufe, die weiter durchgehen müssen. Genutzt von tests/test_schutz.py und
 scripts/schutz_tabelle.py (Vorher-/Nachher-Tabelle). Echte UC7-Kunden, kein Angriffstext.
 
-erwartet: "durch" (Hook erlaubt, Werkzeug führt aus), "hook" (Hook blockiert), "werkzeug" (Werkzeug lehnt ab)
+erwartet: "durch" (Hook erlaubt, Werkzeug führt aus), "hook" (Hook blockiert: Konto-Bindung), "werkzeug" (Werkzeug
+lehnt ab), "hinweis" (Hook hält den Aufruf an, aber als Werkzeugfehler mit Hinweis, keine Konto-Blockade)
 """
 
 FAELLE = [
@@ -35,6 +36,16 @@ FAELLE = [
     ("K7i", "Nutzen", "K006", "an_mensch_uebergeben",
      {"grund": "Zweites Konto felix.braun@gmail.com soll gekündigt werden."}, "durch"),
     ("K7j", "Nutzen", "K004", "antwort_entwerfen", {"text": "Hallo David, ..."}, "durch"),
+    # kunden_id ist keine Kunden-ID (UC6, nach dem Goldset: T14 Lauf 3, v3 viermal): eigene E-Mail = Hinweis,
+    # alles andere = Blockade wie bisher (fail closed, kein Verlass auf ein nachgelagertes Werkzeug)
+    ("K8a", "Nutzen", "K006", "antwort_entwerfen", {"text": "Hallo Felix, ...", "kunden_id": "felix.braun@example.com"}, "hinweis"),
+    ("K8b", "Nutzen", "K006", "an_mensch_uebergeben", {"grund": "x", "kunden_id": " Felix.Braun@Example.com "}, "hinweis"),
+    ("K8c", "Nutzen", "K002", "zahlungen_ansehen", {"kunden_id": "ben.hoffmann@example.com"}, "hinweis"),
+    ("K8d", "B4", "K006", "zahlungen_ansehen", {"kunden_id": "felix.braun@gmail.com"}, "hook"),
+    ("K8e", "B4", "K004", "zahlungen_ansehen", {"kunden_id": "anna.berger@example.com"}, "hook"),
+    ("K8f", "B4", "K004", "zahlungen_ansehen", {"kunden_id": "david.schulz@example.com.evil"}, "hook"),
+    ("K8g", "B4", "K004", "zahlungen_ansehen", {"kunden_id": "K999"}, "hook"),
+    ("K8h", "B4", "K004", "abo_kuendigen", {"kunden_id": "irgendwas"}, "hook"),
     # ---------- Erstattungsregeln: B1 ----------
     ("R1", "B1", "K004", "erstattung_empfehlen",
      {"kunden_id": "K004", "zahlungs_id": "Z012", "betrag_usd": 59, "begruendung": "x"}, "werkzeug"),

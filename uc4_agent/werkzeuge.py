@@ -190,6 +190,25 @@ class Werkzeugkasten:
             "fehler": True, "blockiert": True, "blockiert_art": art,
         })
 
+    def hinweis_protokollieren(self, werkzeug: str, eingabe: dict, text: str, art: str) -> None:
+        """Für Aufrufe, die der PreToolUse-Hook mit einem Hinweis anhält: ein Werkzeugfehler, keine Blockade."""
+        self._seq += 1
+        jetzt = _jetzt()
+        self._anhaengen("trajektorie.jsonl", {
+            "run_id": self.run_id, "seq": self._seq, "zeit_start": jetzt, "zeit_ende": jetzt,
+            "werkzeug": werkzeug, "eingabe": eingabe, "ergebnis": {"fehler": text},
+            "fehler": True, "blockiert": False, "hinweis": art,
+        })
+
+    def konto_hinweis(self, werkzeug: str, eingabe: dict) -> str | None:
+        """Steht in kunden_id keine Kunden-ID, sondern genau die E-Mail des Absenders (ohne Rücksicht auf Groß-/
+        Kleinschreibung und Leerzeichen am Rand), bekommt der Agent einen Hinweis statt einer Blockade. Im Goldset
+        kam das in v3 viermal und nach dem Umbau einmal vor (UC6). Alles andere ohne Kunden-ID blockiert konto_pruefen."""
+        wert = str(eingabe.get("kunden_id") or "").strip()
+        if wert and wert.upper() not in self.kunden and wert.lower() == self.kunden[self.absender_id]["email"].lower():
+            return f"Verwende die Kunden-ID {self.absender_id}."
+        return None
+
     def konto_pruefen(self, werkzeug: str, eingabe: dict) -> str | None:
         """Konto-Bindung: None, wenn der Aufruf nur das Konto des Absenders berührt, sonst die Meldung an den Agent.
         Prüft jede kunden_id und Zahlungs-ID, auch beim Lesen. Fehlende oder leere IDs lässt sie durch, die

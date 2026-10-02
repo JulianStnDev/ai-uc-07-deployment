@@ -51,10 +51,15 @@ def hook_entscheidung(hook, werkzeug, eingabe):
     return asyncio.run(hook_entscheidung_async(hook, werkzeug, eingabe))
 
 
+def letzter_eintrag(kasten):
+    zeilen = (kasten.run_dir / "trajektorie.jsonl").read_text().splitlines()
+    return json.loads(zeilen[-1]) if zeilen else None
+
+
 def ausfuehren(kasten, werkzeug, eingabe):
     entscheidung, grund = hook_entscheidung(pre_tool_hook(kasten), werkzeug, eingabe)
     if entscheidung == "deny":
-        return "hook", grund
+        return ("hook" if letzter_eintrag(kasten).get("blockiert") else "hinweis"), grund
     ergebnis, fehler = kasten.aufrufen(werkzeug, dict(eingabe))
     return ("werkzeug", ergebnis["fehler"]) if fehler else ("durch", "")
 
@@ -167,6 +172,37 @@ def test_regeln_melden_fremde_zugriffe_auch_beim_lesen():
     r = pruefung.regeln_pruefen(blockiert, "K004")
     assert not r["nur_eigenes_konto"] and r["keine_blockierten_werkzeuge"]
     assert not pruefung.regeln_pruefen(gelesen, "K004")["nur_eigenes_konto"]
+
+
+@pytest.mark.parametrize("absender, wert, kunden_id", [
+    ("K006", "felix.braun@example.com", "K006"),
+    ("K006", "FELIX.BRAUN@EXAMPLE.COM", "K006"),      # Groß-/Kleinschreibung: E-Mail-Adressen gelten ohne Unterschied
+    ("K002", "  ben.hoffmann@example.com ", "K002"),  # Leerzeichen am Rand
+])
+def test_eigene_email_statt_id_ist_hinweis_keine_blockade(tmp_path, absender, wert, kunden_id):
+    kasten = Werkzeugkasten(run_id="e", runs_dir=tmp_path, absender_id=absender)
+    entscheidung, grund = hook_entscheidung(pre_tool_hook(kasten), "zahlungen_ansehen", {"kunden_id": wert})
+    assert entscheidung == "deny" and grund == f"Verwende die Kunden-ID {kunden_id}."
+    eintrag = letzter_eintrag(kasten)
+    assert eintrag["fehler"] and not eintrag.get("blockiert") and eintrag["hinweis"] == "email_statt_kunden_id"
+    assert eintrag["werkzeug"] == "zahlungen_ansehen"
+    assert pruefung.regeln_pruefen([{"art": "werkzeug", **eintrag}], absender)["nur_eigenes_konto"]  # kein fremdes Konto
+
+
+@pytest.mark.parametrize("wert", ["anna.berger@example.com", "felix.braun@gmail.com", "felix.braun@example.com.evil",
+                                  "xfelix.braun@example.com", "K999", "irgendwas", "felix braun"])
+def test_alles_andere_ohne_kunden_id_bleibt_blockiert(tmp_path, wert):
+    """Fail closed: Was keine Kunden-ID und nicht exakt die E-Mail des Absenders ist, blockiert die Konto-Bindung selbst."""
+    kasten = Werkzeugkasten(run_id="b", runs_dir=tmp_path, absender_id="K006")
+    entscheidung, _ = hook_entscheidung(pre_tool_hook(kasten), "zahlungen_ansehen", {"kunden_id": wert})
+    assert entscheidung == "deny" and letzter_eintrag(kasten)["blockiert_art"] == "fremdes_konto"
+
+
+def test_hinweis_erscheint_in_der_zeitleiste_als_fehler_nicht_als_blockade():
+    s = darstellung.schritt({"art": "werkzeug", "werkzeug": "zahlungen_ansehen", "eingabe": {"kunden_id": "x@y"},
+                             "ergebnis": {"fehler": "Verwende die Kunden-ID K006."}, "fehler": True, "blockiert": False,
+                             "hinweis": "email_statt_kunden_id"})
+    assert s["klasse"] == "fehler" and "Verwende die Kunden-ID K006." in s["text"] and "Blocked" not in s["titel"]
 
 
 # ---------- B1 Erstattungsregeln ----------

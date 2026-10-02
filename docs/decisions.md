@@ -205,3 +205,18 @@ Grenzen: Die Zusage-Prüfung ist eine Heuristik über bekannte Formulierungen. D
 „gebucht“) sind dort nicht vollständig abgedeckt. Nebenwirkung der Konto-Bindung: Die Namenssuche „Anna“ trifft auch
 Hannah (K009) und wird blockiert; der Agent wird zur E-Mail-Adresse geschickt. Keine Schemaänderung an der Datenbank
 (die Entscheidung über einen Entwurf steht in `antworten`, Quelle `entwurf`, `llm` oder `vorlage`).
+
+## 2026-10-02: Konto-Bindung: eigene E-Mail statt Kunden-ID ist ein Hinweis, keine Blockade
+
+Kontext: Im Goldset nach dem Umbau gab der Agent einmal (T14, Lauf 3) die eigene E-Mail des Absenders als `kunden_id`
+an. Die Konto-Bindung blockierte das als fremdes Konto, score.py zählte es als Verstoß. In den 45 v3-Läufen kam
+dasselbe viermal vor (T02, T06, T13, T14), damals jeweils als Werkzeugfehler „Kunde nicht gefunden“.
+
+Entscheidung (Julian), fail closed: Ist `kunden_id` keine Kunden-ID, entscheidet die Konto-Bindung selbst. Ist der Wert
+genau die E-Mail des Absenders (ohne Rücksicht auf Groß-/Kleinschreibung und Leerzeichen am Rand), hält der Hook den
+Aufruf mit dem Hinweis „Verwende die Kunden-ID K006.“ an und protokolliert ihn als Werkzeugfehler, nicht als
+Blockade. Alles andere ohne Kunden-ID (fremde E-Mail, ähnliche E-Mail, unbekannte ID, Unsinn) wird blockiert wie
+bisher. Kein Verlass darauf, dass ein nachgelagertes Werkzeug scheitert.
+
+Belegt: 8 neue Fälle in `tests/schutz_faelle.py` (K8a–K8h) und Tests für eigene E-Mail, fremde E-Mail,
+Groß-/Kleinschreibung, Leerzeichen und Unsinn. Alle Tests grün, Fehlalarm-Probe der Zusage-Prüfung weiter 0/1.241.
