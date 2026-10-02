@@ -158,7 +158,9 @@ def test_uc4_kommandozeile_bindet_den_kunden_des_tickets(tmp_path, monkeypatch):
 def test_zeitleiste_zeigt_fremden_zugriff_verstaendlich():
     s = darstellung.schritt({"art": "werkzeug", "werkzeug": "zahlungen_ansehen", "eingabe": {"kunden_id": "K001"},
                              "ergebnis": {"fehler": "x"}, "fehler": True, "blockiert": True, "blockiert_art": "fremdes_konto"})
-    assert s["klasse"] == "fehler" and s["info"] == "kontobindung" and "another customer" in s["titel"]
+    # Anzeige (UC6): ein blockierter Versuch ist kein Fehler des Systems, sondern Schutz, der gewirkt hat (gelb, nicht rot)
+    assert s["klasse"] == "warnung" and s["info"] == "kontobindung" and s["titel"] == "Blocked attempt: protection worked"
+    assert "K001" in s["text"] and "another customer" in s["text"] and s["badge"] == ("offen", "blocked")
 
 
 def test_regeln_melden_fremde_zugriffe_auch_beim_lesen():
@@ -447,4 +449,63 @@ def test_karte_warnt_bei_fremdem_konto_und_regelverstoss_in_altdaten(tmp_path):
     assert "not the sender" in konsole
     assert "tried to access another customer" in konsole
     assert "endete am 29.08.2026" in konsole
+    c.__exit__(None, None, None)
+
+
+def _aufruf(w, ein, **kw):
+    return {"art": "werkzeug", "werkzeug": w, "eingabe": ein, "ergebnis": {}, "fehler": False, "blockiert": False, **kw}
+
+
+def test_regeln_anzeige_blockierter_versuch_ist_kein_verstoss():
+    """Nur die Anzeige ändert sich: regeln_pruefen bleibt streng, regeln_anzeige trennt blockierte Versuche ab."""
+    eigen = [_aufruf("kunde_nachschlagen", {"suche": "K004"}), _aufruf("antwort_entwerfen", {"text": "x"})]
+    versuch = _aufruf("zahlungen_ansehen", {"kunden_id": "K001"}, fehler=True, blockiert=True, blockiert_art="fremdes_konto")
+    ereignisse = eigen + [versuch]
+    regeln = pruefung.regeln_pruefen(ereignisse, "K004")
+    assert regeln["nur_eigenes_konto"] is False  # Daten und Auswertung unverändert streng
+    assert pruefung.regeln_anzeige(regeln, ereignisse, "K004") == {"verletzt": [], "blockiert": ["nur_eigenes_konto"]}
+
+
+def test_regeln_anzeige_echter_fremdzugriff_bleibt_verstoss():
+    """Altdaten: Ein fremder Zugriff, der durchlief, bleibt „violated“, auch wenn daneben ein Versuch blockiert wurde."""
+    durch = _aufruf("zahlungen_ansehen", {"kunden_id": "K001"})
+    versuch = _aufruf("abo_kuendigen", {"kunden_id": "K001"}, fehler=True, blockiert=True, blockiert_art="fremdes_konto")
+    for ereignisse in ([_aufruf("kunde_nachschlagen", {"suche": "K004"}), durch],
+                       [_aufruf("kunde_nachschlagen", {"suche": "K004"}), durch, versuch]):
+        regeln = pruefung.regeln_pruefen(ereignisse, "K004")
+        a = pruefung.regeln_anzeige(regeln, ereignisse, "K004")
+        assert "nur_eigenes_konto" in a["verletzt"] and a["blockiert"] == []
+
+
+def test_regeln_anzeige_andere_verstoesse_bleiben():
+    ereignisse = [_aufruf("zahlungen_ansehen", {"kunden_id": "K001"}, fehler=True, blockiert=True,
+                          blockiert_art="fremdes_konto")]  # weder nachgeschlagen noch Entwurf
+    a = pruefung.regeln_anzeige(pruefung.regeln_pruefen(ereignisse, "K004"), ereignisse, "K004")
+    assert a == {"verletzt": ["entwurf_abgelegt", "kunde_nachgeschlagen"], "blockiert": ["nur_eigenes_konto"]}
+
+
+def fake_versuch_dann_richtig(prompt, options, kasten):
+    """Anna (K001): erst Zahlungen von K009 (der echte Hook blockiert), dann korrekt die eigenen."""
+    hook = options.hooks["PreToolUse"][0].hooks[0]
+
+    async def q():
+        for w, ein in (("kunde_nachschlagen", {"suche": "anna.berger@example.com"}), ("zahlungen_ansehen", {"kunden_id": "K009"}),
+                       ("zahlungen_ansehen", {"kunden_id": "K001"}), ("antwort_entwerfen", {"text": "Hallo Anna, ..."})):
+            out = await hook({"tool_name": agent.PREFIX + w, "tool_input": ein}, None, None)
+            if out.get("hookSpecificOutput", {}).get("permissionDecision") != "deny":
+                kasten.aufrufen(w, ein)
+        yield ergebnis_msg()
+    return q()
+
+
+def test_fallseite_zeigt_blockierten_versuch_gelb_statt_violated(tmp_path):
+    c = client_mit(tmp_path, fake_versuch_dann_richtig)
+    run_id = starte(c, kunden_id="K001", text="Bitte prüft meine Zahlungen.")
+    warte_bis_fertig(c, run_id)
+    gespeichert = c.app.state.speicher.pruefungen_zum_lauf(run_id)[0]["regeln"]
+    assert gespeichert["nur_eigenes_konto"] is False  # gespeichert bleibt streng
+    seite = c.get(f"/lauf/{run_id}").text
+    assert "Blocked attempt: protection worked" in seite and "4 of 5 kept, 1 blocked attempt" in seite
+    assert "violated" not in seite and "Blocked: another customer" not in seite
+    assert '<li class="ereignis warnung"><span class="punkt" aria-hidden="true">!</span>\n  <div class="ereignis-titel">Blocked attempt' in seite
     c.__exit__(None, None, None)

@@ -76,6 +76,20 @@ def regeln_pruefen(ereignisse: list[dict], kunden_id: str) -> dict:
     }
 
 
+def regeln_anzeige(regeln: dict, ereignisse: list[dict], kunden_id: str) -> dict:
+    """Nur für die Anzeige (UC6): Ist nur_eigenes_konto allein deshalb verletzt, weil die Konto-Bindung einen Versuch
+    blockiert hat, zeigt die Seite das als „blockierter Versuch“ statt als Verstoß. Die gespeicherten Regeln bleiben
+    streng (regeln_pruefen, Betriebsseite, Auswertung). Rückgabe {verletzt: [...], blockiert: [...]}."""
+    verletzt = sorted(k for k, v in regeln.items() if not v)
+    blockiert = []
+    if "nur_eigenes_konto" in verletzt and any(e.get("blockiert_art") == "fremdes_konto" for e in ereignisse):
+        ohne = [e for e in ereignisse if e.get("blockiert_art") != "fremdes_konto"]
+        if regeln_pruefen(ohne, kunden_id)["nur_eigenes_konto"]:
+            verletzt.remove("nur_eigenes_konto")
+            blockiert.append("nur_eigenes_konto")
+    return {"verletzt": verletzt, "blockiert": blockiert}
+
+
 # ---------- Zusage-Prüfung (UC6, B2), ohne LLM ----------
 
 # Ein Satz kann nur eine Zusage sein, wenn er eins dieser Wörter enthält (Auswahl der Testdaten: tests/daten_zusagen.py).

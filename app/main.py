@@ -463,7 +463,10 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
         """Am Ende gibt es drei Teile: Status-Badge (rechts oben), Kundensicht (links), Abschluss (rechts).
         konsole: nur im Replay, die Entscheidung aus der Support-Konsole als eigene Karte."""
         ctx = {"run_id": lauf["run_id"], "ergebnis": ergebnis, "empfehlungen": empfehlungen,
-               "sicht": kundensicht(lauf, empfehlungen, antwort_), "pruefungen": pruefungen, "aufzeichnung": aufzeichnung,
+               "sicht": kundensicht(lauf, empfehlungen, antwort_), "aufzeichnung": aufzeichnung,
+               "pruefungen": [{**p, "anzeige": pruefung.regeln_anzeige(p["regeln"], lauf.get("ereignisse") or [],
+                                                                       lauf["kunden_id"]) if p.get("regeln") else None}
+                              for p in pruefungen],
                "konsole": konsole}
         return {name: fragment(f"_{name}.html", **ctx) for name in ("status", "entwurf", "abschluss")}
 
