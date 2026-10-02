@@ -1,6 +1,6 @@
 # Deployment auf Cloud Run (Frankfurt)
 
-Stand 2026-09-30 (Revision `uc7-00008`, Datenbankrolle `uc7_app`). Projekt `focusflow-demo-510014` (Anzeigename „focusflow-demo“), Region `europe-west3`, Dienst `uc7`.
+Stand 2026-10-02 (Revision `uc7-00009-pv4`, Commit `d86b433` mit dem Schutz im Code aus UC6; Rollback-Ziel `uc7-00008-qtl`; Datenbankrolle `uc7_app`). Projekt `focusflow-demo-510014` (Anzeigename „focusflow-demo“), Region `europe-west3`, Dienst `uc7`.
 Öffentliche URL: https://uc7-807149335205.europe-west3.run.app (ohne Login: aufgezeichneter Lauf; live nur mit persönlichem Link oder Admin-Zugangscode).
 
 ## Einmalige Einrichtung
@@ -100,8 +100,13 @@ Cloud Run behält die alten Revisionen. Zurück ohne Neubau, nur den Traffic uml
 gcloud run revisions list --service uc7 --region europe-west3 --limit 5      # welche Revision lief vorher?
 gcloud run services update-traffic uc7 --region europe-west3 --to-revisions <REVISION>=100
 ```
-Vor dem Schutz im Code (UC6, PR #11) lief `uc7-00008-qtl` (Commit `2c8cc86`). Das Schema ist bei diesem Schritt gleich
-geblieben, die alte Revision startet also ohne Datenbankänderung.
+Aktuell live: `uc7-00009-pv4` (Commit `d86b433`, seit 2026-10-02). **Rollback-Ziel:** `uc7-00008-qtl` (Commit `2c8cc86`,
+vor dem Schutz im Code aus UC6, PR #11):
+```bash
+gcloud run services update-traffic uc7 --region europe-west3 --to-revisions uc7-00008-qtl=100
+```
+Das Schema ist bei diesem Schritt gleich geblieben, die alte Revision startet also ohne Datenbankänderung. Vorher
+unbedingt die Falle unten beachten.
 
 ### Falle: Rollback hinter den Schutz im Code (PR #11)
 
