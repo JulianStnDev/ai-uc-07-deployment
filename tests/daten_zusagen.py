@@ -1,9 +1,9 @@
 """Echte Sätze aus Agent-Entwürfen OHNE Erstattungsempfehlung, für die Zusage-Prüfung (UC6, Branch b, Lücke B2).
 
-Quelle: UC4-Läufe v1–v3 (ai-uc-04-agents-mcp, evals/laeufe/<version>/<lauf>/antwortentwuerfe.jsonl, letzter Entwurf
-je Lauf) und UC7-Läufe aus Neon (Stand 02.10.2026). Ausgewählt sind alle Sätze, die „erstatt“, „zurück“, „gutschr“,
-„überweis“ oder einen Geldbetrag enthalten, also jeder Satz, den die Prüfung überhaupt treffen könnte. Sehr lange Sätze
-sind bei der Auswahl auf 200 Zeichen gekürzt worden.
+Quelle: nur UC4-Läufe v1–v3 (ai-uc-04-agents-mcp, evals/laeufe/<version>/<lauf>/antwortentwuerfe.jsonl, letzter
+Entwurf je Lauf), keine Live-Daten. Ausgewählt sind Sätze mit „erstatt“, „zurück“, „gutschr“, „überweis“ oder einem
+Geldbetrag, dazu fünf Sätze mit „Geld“, „Betrag“ und „Rückzahlung“. Einige lange Sätze sind auf 200 Zeichen gekürzt.
+Die vollständige Probe über alle 1.248 Sätze der Entwürfe ohne Empfehlung steht in UC6 (evals/results.md).
 
 ZUSAGEN: die 7 Sätze, die eine Erstattung zusagen, obwohl der Agent keine empfohlen hat (alle Ticket T02, Ben K002,
 behauptete Doppelbuchung bei nur einer Zahlung). Ziel: 7 von 7 erkannt.
@@ -137,9 +137,9 @@ KEINE_ZUSAGEN = [
     ("v3/T15_lauf1", "gestartet ist, können wir die 6,99 USD nicht zurückbuchen."),
     ("v3/T15_lauf2", "Leider können wir für bereits begonnene Monate keine Erstattung gewähren – das ist unsere Richtlinie auch für Monate, die nicht aktiv genutzt werden."),
     ("v3/T15_lauf3", "Zur Erstattung: Nach unserer Richtlinie werden bereits begonnene Monate grundsätzlich nicht erstattet – auch nicht anteilig, selbst wenn die App nicht genutzt wurde."),
-    ("uc7/20260928-190959-e0f2e4", "Zur Erstattung: Nach unserer Erstattungsrichtlinie können bereits begonnene Monate bei Monatsabos leider nicht erstattet werden – auch nicht anteilig."),
-    ("uc7/20260929-052037-0865e4", "Leider kann ich dir keine gute Nachricht geben: Für Jahresabos erstatten wir den Betrag nur innerhalb von 14 Tagen nach dem Kauf."),
-    ("uc7/20260929-052037-0865e4", "In diesem Fall können wir die Erstattung nicht selbst durchführen – da musst du dich direkt an Google Play wenden."),
-    ("uc7/20260929-052037-0865e4", "Beantrage deine Erstattung hier: https://support.google.com/googleplay/answer/2479637"),
-    ("uc7/20260930-105723-7279c9", "**Wichtig:** Wenn beide Konten gerade Pro-Abos haben, musst du eins davon vorher kündigen – eine automatische Erstattung erfolgt dabei nicht."),
+    ("v1/T15_lauf2", "bis 08.10.2026 läuft, ist eine Rückzahlung leider nicht möglich."),
+    ("v1/T05_lauf3", "Leider kann ich für die Erstattung dem anteilig ein negatives Ergebnis mitteilen: Unsere Erstattungsrichtlinie für Jahresabos sieht vor, dass wir den Betrag nur innerhalb von 14 Tagen nach Kauf zurückerstatten."),
+    ("v2/T13_lauf3", "Da du auf iOS bist, könnte das Geld vom App Store abgezogen worden sein, während die Aktivierung bei uns fehlgeschlagen ist."),
+    ("v3/T15_lauf3", "Deine aktuelle Periode läuft noch bis zum 08.10., weshalb leider keine Rückzahlung möglich ist."),
+    ("v2/T05_lauf3", "Ich habe dein Jahresabo sofort gekündigt – künftig werden keine neuen Beträge mehr abgebucht."),
 ]
