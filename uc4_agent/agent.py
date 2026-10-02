@@ -10,6 +10,8 @@ Abgrenzung (siehe docs/decisions.md):
 - Abrechnung nur über ANTHROPIC_API_KEY, ohne Key bricht das Skript ab.
 - Isolation: keine eingebauten Werkzeuge, keine Settings/CLAUDE.md/Skills, nur
   unser MCP-Server. Der PreToolUse-Hook lehnt alles außer mcp__focusflow__* ab.
+- Konto-Bindung (UC6): Derselbe Hook lehnt jeden Aufruf ab, der ein anderes Konto als das des
+  Absenders berührt, auch beim Lesen. Der Absender kommt aus der Sitzung, nicht aus dem Ticket-Text.
   docs/DATA_NOTES.md gelangt so nie in den Kontext.
 
 Aufruf:
@@ -125,6 +127,34 @@ def nur_focusflow_hook(kasten: Werkzeugkasten):
     return hook
 
 
+def konto_hook(kasten: Werkzeugkasten):
+    """PreToolUse-Hook (UC6): erlaubt nur Aufrufe für das Konto des Absenders (Werkzeugkasten.konto_pruefen)."""
+    async def hook(input_data, tool_use_id, context):
+        name = input_data.get("tool_name", "")
+        werkzeug = name[len(PREFIX):] if name.startswith(PREFIX) else name
+        eingabe = input_data.get("tool_input", {}) or {}
+        grund = kasten.konto_pruefen(werkzeug, eingabe)
+        if grund is None:
+            return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}
+        kasten.blockiert_protokollieren(werkzeug, eingabe, grund, art="fremdes_konto")
+        return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                       "permissionDecisionReason": grund}}
+    return hook
+
+
+def werkzeug_hook(kasten: Werkzeugkasten):
+    """Der eine PreToolUse-Hook des Agents: erst Werkzeugname (nur focusflow), dann Konto-Bindung.
+    Bewusst ein einziger Hook, damit die Reihenfolge feststeht und ein Nein immer gewinnt."""
+    name_hook, konto = nur_focusflow_hook(kasten), konto_hook(kasten)
+
+    async def hook(input_data, tool_use_id, context):
+        ergebnis = await name_hook(input_data, tool_use_id, context)
+        if ergebnis["hookSpecificOutput"]["permissionDecision"] == "deny":
+            return ergebnis
+        return await konto(input_data, tool_use_id, context)
+    return hook
+
+
 def pflicht_stop_hook(kasten: Werkzeugkasten, eingriffe: list):
     """Stop-Hook: Der Lauf darf erst enden, wenn der Kunde nachgeschlagen und ein Entwurf abgelegt ist,
     auch nach einer Übergabe. Jeder Eingriff wird gezählt (Kennzahl, nicht verstecken).
@@ -151,8 +181,11 @@ def baue_optionen(kasten: Werkzeugkasten, key: str, eingriffe: list, prompt_vers
                   env_extra: dict | None = None) -> ClaudeAgentOptions:
     """SDK-Konfiguration für einen Lauf. UC7: aus bearbeite_ticket herausgelöst, damit die Web-App
     exakt dieselbe Konfiguration nutzt (Modell, Deckel, Hooks, Isolation). env_extra ergänzt nur
-    Umgebungsvariablen für den CLI-Prozess (z. B. CLAUDE_CONFIG_DIR im Container)."""
-    hooks = {"PreToolUse": [HookMatcher(matcher=None, hooks=[nur_focusflow_hook(kasten)])]}
+    Umgebungsvariablen für den CLI-Prozess (z. B. CLAUDE_CONFIG_DIR im Container).
+    Ohne Absender (kasten.absender_id) gibt es keine Konfiguration: Die Konto-Bindung schließt im Zweifel."""
+    if not kasten.absender_id:
+        raise ValueError("Werkzeugkasten ohne Absender: Die Konto-Bindung braucht das Konto aus der Sitzung.")
+    hooks = {"PreToolUse": [HookMatcher(matcher=None, hooks=[werkzeug_hook(kasten)])]}
     if prompt_version in PFLICHT_HOOK_AB:
         hooks["Stop"] = [HookMatcher(matcher=None, hooks=[pflicht_stop_hook(kasten, eingriffe)])]
     return ClaudeAgentOptions(
@@ -174,7 +207,7 @@ def baue_optionen(kasten: Werkzeugkasten, key: str, eingriffe: list, prompt_vers
 
 async def bearbeite_ticket(ticket: dict, run_id: str, runs_dir: Path = RUNS_DIR, prompt_version: str = "v3") -> dict:
     key = api_key_pruefen()
-    kasten = Werkzeugkasten(run_id=run_id, runs_dir=runs_dir)
+    kasten = Werkzeugkasten(run_id=run_id, runs_dir=runs_dir, absender_id=ticket["kunde_id"])  # Sitzung = Ticket-Metadaten
     eingriffe: list = []
     options = baue_optionen(kasten, key, eingriffe, prompt_version)
     # Latenz getrennt: SDK-Start (bis init-Nachricht der CLI), Agent (init bis Ergebnis), SDK-Ende (bis Prozessende)

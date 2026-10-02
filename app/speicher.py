@@ -287,6 +287,19 @@ class Speicher:
             return False
         return True
 
+    def offene_entwurfspruefungen(self, nur_zugang: str | None = None, limit: int = 50) -> list[dict]:
+        """Fertige Läufe ohne Empfehlung, deren Entwurf etwas zusagt (ergebnis.zusage_saetze) und über die noch
+        niemand entschieden hat (keine Antwort). UC6, B2."""
+        f, p = self._filter(nur_zugang)
+        faelle = []
+        for r in self._alle("SELECT l.run_id, l.erstellt, l.kunden_id, l.absender, l.text, l.titel, l.ergebnis FROM laeufe l "
+                            "LEFT JOIN antworten a USING (run_id) WHERE a.run_id IS NULL AND l.status = 'fertig' "
+                            f"AND l.ergebnis LIKE ?{f} ORDER BY l.erstellt LIMIT ?", ('%"zusage_saetze": ["%', *p, limit)):
+            ergebnis = json.loads(r["ergebnis"])
+            if ergebnis.get("zusage_saetze") and not ergebnis.get("empfehlungen"):
+                faelle.append({**r, "ergebnis": ergebnis})
+        return faelle
+
     def uebergaben(self, limit: int = 20, nur_zugang: str | None = None) -> list[dict]:
         """Fälle, die der Agent an einen Menschen übergeben hat (aus dem Ergebnis der Läufe)."""
         faelle = []

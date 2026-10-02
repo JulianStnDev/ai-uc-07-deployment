@@ -87,7 +87,11 @@ def schritt(ereignis: dict, erste_notiz: bool = False) -> dict:
     w, ein, erg = ereignis["werkzeug"], ereignis["eingabe"], ereignis["ergebnis"]
     e = {"klasse": "fertig", "symbol": "✓", "titel": WERKZEUG_TITEL.get(w, w), "info": WERKZEUG_INFO.get(w),
          "text": "", "liste": [], "badge": None, "notiz": False}
-    if ereignis.get("blockiert"):
+    if ereignis.get("blockiert") and ereignis.get("blockiert_art") == "fremdes_konto":
+        ziel = ein.get("kunden_id") or ein.get("zahlungs_id") or ein.get("suche") or "?"
+        e.update(klasse="fehler", symbol="×", titel="Blocked: another customer's account", info="kontobindung",
+                 text=f"The agent tried “{w}” for “{ziel}”. It may only use the account of the person who wrote.")
+    elif ereignis.get("blockiert"):
         e.update(klasse="fehler", symbol="×", titel="Blocked a tool that is not allowed", info="blockiert",
                  text=f"The agent tried to use “{w}”. That tool is not permitted.")
     elif ereignis["fehler"]:

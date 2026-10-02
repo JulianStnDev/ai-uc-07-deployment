@@ -11,6 +11,7 @@ Datum "heute" des Agents (UC4-Learning: ohne Datum wertete er korrekte Fristschl
 
 import hashlib
 import json
+import re
 import time
 
 from uc4_agent.werkzeuge import DATA_DIR
@@ -50,13 +51,15 @@ def _aufrufe(ereignisse: list[dict]) -> list[dict]:
 
 
 def regeln_pruefen(ereignisse: list[dict], kunden_id: str) -> dict:
-    """UC4-Pflichten, die sich aus dem Ablauf ablesen lassen. Jede Regel: True/False."""
+    """UC4-Pflichten, die sich aus dem Ablauf ablesen lassen. Jede Regel: True/False.
+    nur_eigenes_konto (seit UC6): kein Werkzeug mit fremder kunden_id, auch nicht lesend, und kein Versuch, den die
+    Konto-Bindung blockiert hat. Diese Blockaden zählen nicht als „blockiertes Werkzeug“, das Werkzeug ist ja erlaubt."""
     aufrufe = _aufrufe(ereignisse)
     ok = [e for e in aufrufe if not e["fehler"]]
     namen = [e["werkzeug"] for e in ok]
     fremd = [e["werkzeug"] for e in ok
-             if e["werkzeug"] in ("abo_kuendigen", "erstattung_empfehlen", "an_mensch_uebergeben", "antwort_entwerfen")
-             and (e["eingabe"].get("kunden_id") or kunden_id).upper() != kunden_id]
+             if (e["eingabe"].get("kunden_id") or kunden_id).strip().upper() != kunden_id]
+    fremd += [e["werkzeug"] for e in aufrufe if e.get("blockiert_art") == "fremdes_konto"]
     zahlungen_vorher = True
     for i, e in enumerate(ok):
         if e["werkzeug"] == "erstattung_empfehlen":
@@ -66,10 +69,51 @@ def regeln_pruefen(ereignisse: list[dict], kunden_id: str) -> dict:
     return {
         "kunde_nachgeschlagen": "kunde_nachschlagen" in namen,
         "entwurf_abgelegt": "antwort_entwerfen" in namen,
-        "keine_blockierten_werkzeuge": not any(e.get("blockiert") for e in aufrufe),
+        "keine_blockierten_werkzeuge": not any(e.get("blockiert") and e.get("blockiert_art") != "fremdes_konto"
+                                               for e in aufrufe),
         "nur_eigenes_konto": not fremd,
         "zahlungen_vor_empfehlung": zahlungen_vorher,
     }
+
+
+# ---------- Zusage-Prüfung (UC6, B2), ohne LLM ----------
+
+# Ein Satz kann nur eine Zusage sein, wenn er eins dieser Wörter enthält (Auswahl der Testdaten: tests/daten_zusagen.py).
+_GELD = re.compile(r"erstatt|zurück|gutschr|überweis|rückzahl|geld|betrag|gebucht|ausgezahlt", re.I)
+# Zusage-Formen: Wir tun es, es wird getan, du bekommst es, es ist veranlasst.
+_ZUSAGE = [re.compile(m, re.I) for m in (
+    r"\b(erstatten|überweisen|buchen|zahlen)\s+wir\b",
+    r"\bwir\s+(erstatten|überweisen)\b",
+    r"\b(werden|wird)\s+wir\b.*\b(erstatten|zurückbuchen|zurückzahlen|überweisen|gutschreiben)\b",
+    r"\bwir\s+werden\b.*\b(erstatten|zurückbuchen|zurückzahlen|überweisen|gutschreiben)\b",
+    r"\b(wird|werden)\b.*\b(erstattet|gebucht|zurückgebucht|zurückgezahlt|ausgezahlt|überwiesen|gutgeschrieben)\b",
+    r"\b(haben|hat)\b.*\b(erstattet|zurückgebucht|zurückgezahlt|ausgezahlt|überwiesen|gutgeschrieben)\b",
+    r"\berstattung\b.*\b(eingeleitet|veranlasst|angewiesen|weitergeleitet|ausgelöst)\b",
+    r"\b(leite|leiten)\s+(ich|wir)\b.*\berstattung",
+    r"\b(rückzahlung|erstattung|geld|betrag|gutschrift)\b.*\b(bekommst|erhältst)\s+du\b",
+    r"\b(bekommst|erhältst)\s+du\b.*\b(rückzahlung|erstattung|geld|betrag|gutschrift)\b",
+    r"\bdu\s+(solltest|wirst)\b.*\b(geld|betrag|rückzahlung|erstattung|gutschrift)\b",
+    r"\b(kümmern\s+wir\s+uns|wir\s+kümmern\s+uns)\b.*\b(rück)?erstattung",
+    r"\b(bekommst|erhältst)\s+du\b.*\bzurück\b",
+    r"\bdu\s+(bekommst|erhältst)\b.*\bzurück\b",
+    r"\bzur\s+erstattung\s+(weitergeleitet|freigegeben|angewiesen)",
+    r"\berstattung\s+(ist|wurde|wird)\s+(veranlasst|angewiesen|ausgelöst|freigegeben|bestätigt|unterwegs)",
+    r"\bgutschrift\b",
+)]
+# Keine Zusage: verneint oder eingeschränkt, oder ein Dritter erstattet (Store, Bank).
+_VERNEINT = re.compile(r"\b(nicht|kein|keine|keinen|keiner|leider)\b|nur innerhalb|nur möglich|nur wenn|ausgeschlossen", re.I)
+_DRITTE = re.compile(r"\b(apple|google|store|bank)\b", re.I)
+
+
+def zusage_saetze(text: str | None) -> list[str]:
+    """Sätze, die eine Erstattung oder Geld zusagen. Deterministisch, ohne Modell. Abgestimmt auf alle echten
+    Entwürfe aus UC4 und UC7 (tests/daten_zusagen.py). Im Zweifel lieber ein Treffer zu viel: Ein Treffer heißt
+    nur, dass ein Mensch den Entwurf vor dem Versand ansieht."""
+    if not text:
+        return []
+    saetze = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", text) if s.strip()]
+    return [s for s in saetze if _GELD.search(s) and any(m.search(s) for m in _ZUSAGE)
+            and not _VERNEINT.search(s) and not _DRITTE.search(s)]
 
 
 # ---------- 2. Judge (LLM) ----------

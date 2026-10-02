@@ -32,12 +32,16 @@
     <dl class="fall-fakten">
       <dt>Customer</dt><dd>{{ k.name }} ({{ k.kunden_id }}) · {{ k | abo }}</dd>
       {% if z %}<dt>Payment</dt><dd>{{ z.zahlungs_id }} · {{ z.datum | datum }} · {{ z.betrag_usd | usd }} · {{ z.beschreibung }}</dd>{% endif %}
-      <dt>Request</dt><dd>{{ e.titel or e.ticket_text[:60] }} · <a href="/lauf/{{ e.run_id }}">view the whole case</a></dd>
+      {% set c = karten[e.empfehlungs_id] %}
+      <dt>Sender</dt><dd>{{ c.absender.name }} ({{ c.absender_id }}) · {{ c.absender.email }}</dd>
+      <dt>Request</dt><dd><span lang="de" style="white-space: pre-wrap;">{{ c.ticket }}</span> · <a href="/lauf/{{ e.run_id }}">view the whole case</a></dd>
+      {% if c.regel %}<dt>Rule check {{ info("regelgrundlage", "Rule check") }}</dt><dd lang="de">{% if c.regel.erlaubt %}✓{% else %}✗{% endif %} {{ c.regel.text }}</dd>{% endif %}
     </dl>
+    {% for w in c.warnungen %}<p class="meldung fehler" role="alert">{{ w }}</p>{% endfor %}
     <div class="begruendung"><strong>Agent's reason:</strong> <span lang="de">{{ e.begruendung }}</span></div>
-    {% if entwuerfe.get(e.run_id) %}
+    {% if c.entwurf %}
     <details class="agent-entwurf"><summary>Agent's draft (internal) {{ info("agententwurf", "Agent's draft") }}</summary>
-      <div class="nachricht support" lang="de">{{ entwuerfe[e.run_id] }}</div></details>
+      <div class="nachricht support" lang="de">{{ c.entwurf }}</div></details>
     {% endif %}
     <p class="sehr-leise" style="margin-top: 8px;">After your decision, the final reply to the customer is written.</p>
   </div>
@@ -52,6 +56,32 @@
 </article>
 {% endfor %}
 </div>
+
+{% if zusage_pruefungen %}
+<h2 class="abschnitt-titel">Promise without a recommendation {{ info("zusagepruefung", "Promise without a recommendation") }} <span class="badge offen">{{ zusage_pruefungen | length }}</span></h2>
+<div class="stapel">
+{% for f in zusage_pruefungen %}
+<article class="karte fall" aria-labelledby="zusage-{{ loop.index }}">
+  <div>
+    <div class="fall-kopf"><strong id="zusage-{{ loop.index }}">{{ f.absender_kunde.name }}</strong><span class="badge offen">open</span>
+      <span class="sehr-leise">{{ f.erstellt | datum }} UTC</span></div>
+    <dl class="fall-fakten">
+      <dt>Sender</dt><dd>{{ f.absender_kunde.name }} ({{ f.kunden_id }}) · {{ f.absender }}</dd>
+      <dt>Request</dt><dd><span lang="de" style="white-space: pre-wrap;">{{ f.text }}</span> · <a href="/lauf/{{ f.run_id }}">view the whole case</a></dd>
+    </dl>
+    <p class="sehr-leise" style="margin-top: 8px;">The agent recommended no refund, but its draft promises one. Marked sentences were found by the program code.</p>
+    <div class="nachricht support" lang="de" style="white-space: pre-wrap;">{{ f.markiert }}</div>
+  </div>
+  <form class="entscheidung" method="post" action="/entwuerfe/{{ f.run_id }}" aria-label="Decision on the draft for {{ f.absender_kunde.name }}">
+    <label for="zk-{{ loop.index }}" class="sehr-leise" style="font-weight: 500;">Reason for the customer (optional)</label>
+    <input id="zk-{{ loop.index }}" name="begruendung" maxlength="1000" placeholder="goes into the reply if you remove the promise">
+    <button class="knopf gruen" name="entscheidung" value="freigegeben">Release draft as is</button>
+    <button class="knopf rot" name="entscheidung" value="gestrichen">Remove the promise</button>
+  </form>
+</article>
+{% endfor %}
+</div>
+{% endif %}
 
 {% if entschieden %}
 <h2 class="abschnitt-titel">Recently decided</h2>

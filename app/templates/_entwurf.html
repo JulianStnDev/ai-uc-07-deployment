@@ -9,7 +9,11 @@
   {% else %}<p class="leise">There is no reply draft. A support employee will get in touch personally.</p>{% endif %}
 {% elif sicht.art == "zwischenbescheid" %}
   <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support · Interim reply {{ info("zwischenbescheid", "Interim reply") }}</div>
+  {% if sicht.pruefung == "zusage" %}
+  <div class="entwurf-hinweis" role="note"><span aria-hidden="true">⏳</span><span><strong>Reply under review.</strong> The draft promised money without a refund recommendation {{ info("zusagepruefung", "Reply under review") }}. A human checks it in the <a href="/freigaben">support console</a>. The reply appears here afterwards.</span></div>
+  {% else %}
   <div class="entwurf-hinweis" role="note"><span aria-hidden="true">⏳</span><span><strong>Refund under review.</strong> A human decides in the {% if aufzeichnung %}support console{% else %}<a href="/freigaben">support console</a>{% endif %}. The final reply appears here afterwards.</span></div>
+  {% endif %}
   <div class="nachricht support" lang="de">{{ sicht.text }}</div>
 {% elif sicht.art == "wird_geschrieben" %}
   <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support</div>
@@ -17,7 +21,11 @@
 {% else %}
   <div class="nachricht-kopf"><span class="avatar mini" aria-hidden="true">F</span>FocusFlow Support · Reply after the decision {{ info("endgueltig", "Reply after the decision") }}</div>
   {# Der Mensch hat über die Erstattung entschieden, den Text selbst hat er nicht gelesen. Deshalb "decided", nicht "approved". #}
+  {% if sicht.pruefung == "zusage" %}
+  <div class="entwurf-hinweis entschieden" role="note"><span aria-hidden="true">✓</span><span><strong>Checked by support on {{ sicht.entschieden | datum }} UTC</strong>. {% if sicht.quelle == "entwurf" %}The draft was released as it was.{% else %}The promise in the draft was removed{% if sicht.quelle == "vorlage" %}, this reply comes from a fixed template{% endif %}.{% endif %}</span></div>
+  {% else %}
   <div class="entwurf-hinweis entschieden" role="note"><span aria-hidden="true">✓</span><span><strong>Decided by support on {{ sicht.entschieden | datum }} UTC</strong> (refund {{ "confirmed" if sicht.bestaetigt else "rejected" }}). This reply is based on the decision{% if sicht.quelle == "vorlage" %} and comes from a fixed template{% endif %}.</span></div>
+  {% endif %}
   <div class="nachricht support" lang="de">{{ sicht.text }}</div>
 {% endif %}
 </div>

@@ -80,5 +80,55 @@ def antwort_schreiben(client, lauf: dict, empfehlungen: list[dict]) -> dict:
             "input_tokens": r.usage.input_tokens, "output_tokens": r.usage.output_tokens}
 
 
+# ---------- Zusage ohne Empfehlung (UC6, B2) ----------
+
+ZUSAGE_SYSTEM = """Du schreibst die Antwort des Supports der Habit-Tracker-App FocusFlow an einen Kunden. Ein KI-Agent hat das Ticket bearbeitet. Sein Entwurf sagt eine Erstattung oder Geld zu, obwohl niemand eine Erstattung empfohlen oder entschieden hat. Ein Mitarbeiter hat entschieden: Diese Zusage wird nicht gegeben. Du bekommst das Ticket, alle Werkzeugaufrufe des Agents mit Ergebnissen, den Entwurf, die beanstandeten Sätze und gegebenenfalls eine Begründung des Mitarbeiters für den Kunden.
+
+Regeln:
+- Lass jede Zusage von Erstattung, Rückzahlung, Gutschrift oder Geld weg, auch bedingte („falls …, erstatten wir“), und nenne keine Zeitpunkte dafür.
+- Übernimm aus dem Entwurf nur, was durch die Werkzeugaufrufe gedeckt ist. Streiche Vermutungen über Ursachen.
+- Steht eine Begründung für den Kunden dabei, gib sie sinngemäß wieder.
+- Deutsch, per Du, freundlich, knapp. Anrede mit Vornamen, Gruß „FocusFlow Support“. Kein Markdown.
+Gib nur den Text der Antwort aus."""
+
+
+def zwischenbescheid_pruefung(name: str) -> str:
+    """Fester Text, solange ein Mitarbeiter einen Entwurf mit Zusage noch nicht geprüft hat. Ohne Zusage, ohne Frist."""
+    return (f"Hallo {vorname(name)},\n\n"
+            "danke für deine Nachricht. Wir haben uns dein Anliegen angesehen. Bevor du unsere Antwort bekommst, "
+            "sieht sie sich noch ein Mitarbeiter an. Danach findest du sie hier.\n\n"
+            "Viele Grüße\nFocusFlow Support")
+
+
+def vorlage_ohne_zusage(name: str, kommentar: str) -> str:
+    """Rückfallebene ohne LLM, wenn die Zusage gestrichen wurde."""
+    zusatz = f" {kommentar.strip()}" if kommentar and kommentar.strip() else ""
+    return (f"Hallo {vorname(name)},\n\ndanke für deine Nachricht. Wir haben uns dein Anliegen angesehen. "
+            f"Eine Erstattung ist dafür nicht vorgesehen.{zusatz}\n\nViele Grüße\nFocusFlow Support")
+
+
+def ohne_zusage_inhalt(lauf: dict, kommentar: str) -> str:
+    ergebnis = lauf.get("ergebnis") or {}
+    saetze = "\n".join(f"- {s}" for s in ergebnis.get("zusage_saetze") or [])
+    return (f"<ticket>\n{lauf['text']}\n</ticket>\n\n<trajektorie>\n{trajektorie_als_kontext(lauf['ereignisse'])}\n</trajektorie>\n\n"
+            f"<entwurf_des_agents>\n{ergebnis.get('entwurf') or '(kein Entwurf)'}\n</entwurf_des_agents>\n\n"
+            f"<beanstandete_saetze>\n{saetze}\n</beanstandete_saetze>\n\n"
+            f"<begruendung_fuer_den_kunden>\n{kommentar.strip() or 'Keine Begründung angegeben.'}\n</begruendung_fuer_den_kunden>\n\n"
+            "Schreib jetzt die Antwort an den Kunden ohne die Zusage.")
+
+
+def ohne_zusage_schreiben(client, lauf: dict, kommentar: str) -> dict:
+    """Ein Haiku-Aufruf. Ob die neue Antwort selbst wieder etwas zusagt, prüft der Aufrufer (main.py)."""
+    r = client.messages.create(model=ANTWORT_MODELL, max_tokens=ANTWORT_MAX_TOKENS, system=ZUSAGE_SYSTEM,
+                               messages=[{"role": "user", "content": ohne_zusage_inhalt(lauf, kommentar)}])
+    p = PREISE[ANTWORT_MODELL]
+    kosten = (r.usage.input_tokens * p["input"] + r.usage.output_tokens * p["output"]) / 1e6
+    if r.stop_reason != "end_turn":
+        raise RuntimeError(f"stop_reason={r.stop_reason} (Kosten {kosten:.4f} USD)")
+    text = "".join(b.text for b in r.content if b.type == "text").strip()
+    return {"text": text, "kosten_usd": round(kosten, 6), "modell": ANTWORT_MODELL,
+            "input_tokens": r.usage.input_tokens, "output_tokens": r.usage.output_tokens}
+
+
 def json_kurz(d) -> str:
     return json.dumps(d, ensure_ascii=False)
