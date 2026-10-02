@@ -33,6 +33,9 @@ INFO = {
     "zusage": "Does the text promise a refund that no human has decided on yet? That must not happen.",
     "fehlerquote": "Anteil der Durchläufe, die mit einem Fehler endeten oder abgebrochen wurden. Anliegen, die nie gestartet sind, zählen nicht mit.",
     "blockiert": "The agent may only use its seven support tools. The program code rejects anything else before it runs.",
+    "kontobindung": "The agent may only read and act for the account of the person who wrote. The program code blocks any other account before the tool runs.",
+    "zusagepruefung": "The reply draft promises money although the agent recommended no refund. The program code holds it back until a human has checked it.",
+    "regelgrundlage": "The program code checks every recommendation against the refund policy (14 days for annual plans, double charges always, no store purchases) before it reaches you.",
     "sprache": "FocusFlow is a fictional German app, so customer conversations are in German. Everything around them is in English.",
 }
 

@@ -7,7 +7,8 @@ Seiten:
     /login              Admin-Zugangscode eingeben
     /anliegen           Kundenportal: Kunde wählen + Anliegen schreiben (oder Pause, wenn Budget aufgebraucht)
     /lauf/{id}          Links Kundenportal mit Antwortentwurf, rechts "Hinter den Kulissen" live per SSE
-    /freigaben          Support-Konsole: Erstattungsempfehlungen bestätigen oder ablehnen, Übergaben
+    /freigaben          Support-Konsole: Erstattungsempfehlungen bestätigen oder ablehnen, Entwürfe mit Zusage prüfen, Übergaben
+    /entwuerfe/{id}     Entwurf mit Zusage ohne Empfehlung freigeben oder die Zusage streichen (UC6, B2)
     /betrieb            Übersicht: Läufe, Kosten, Dauer, Fehlerquote, Prüfungen (nur Admin)
 
 Rollen: gast (kein Zugang, nur Replay), link (persönlicher Link, sieht nur Läufe mit dem eigenen Code),
@@ -31,8 +32,9 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 
-from uc4_agent.werkzeuge import DATA_DIR, ROOT as UC4_ROOT
+from uc4_agent.werkzeuge import DATA_DIR, ROOT as UC4_ROOT, erstattung_pruefen
 
 from . import antwort, budget, darstellung, hinweise, pruefung, zugang
 from .einstellungen import Einstellungen, aus_umgebung
@@ -52,6 +54,7 @@ NUR_ADMIN = ("/betrieb", "/diagnose")
 HIER = Path(__file__).parent
 KUNDEN = {k["kunden_id"]: k for k in json.loads((DATA_DIR / "kunden.json").read_text(encoding="utf-8"))["kunden"]}
 ZAHLUNGEN = {z["zahlungs_id"]: z for z in json.loads((DATA_DIR / "zahlungen.json").read_text(encoding="utf-8"))["zahlungen"]}
+REFERENZTAG = json.loads((DATA_DIR / "kunden.json").read_text(encoding="utf-8"))["referenztag"]  # "heute" des Agents
 BEISPIELE = [{"id": t["id"], "kunden_id": t["kunde_id"], "text": t["text"], "label": hinweise.BEISPIEL_LABELS[t["id"]]}
              for t in json.loads((UC4_ROOT / "evals" / "aufgaben.json").read_text(encoding="utf-8"))["aufgaben"]
              if t.get("kunde_id") in KUNDEN]
@@ -61,14 +64,19 @@ BEISPIEL_TEXTE = {b["id"]: b["text"] for b in BEISPIELE}
 AUFZEICHNUNG = json.loads((HIER / "replay" / "aufzeichnung.json").read_text(encoding="utf-8"))
 
 
+def jetzt() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def neue_run_id() -> str:
     return f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{secrets.token_hex(3)}"
 
 
 def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _sdk_query,
-               judge_fn=None, antwort_fn=None) -> FastAPI:
-    """judge_fn(ticket, text, ereignisse, entscheidung) -> Urteil und antwort_fn(lauf, empfehlungen) -> {text, kosten_usd,
-    modell} sind austauschbar, damit Tests ohne LLM laufen. Standard: echte API-Aufrufe."""
+               judge_fn=None, antwort_fn=None, zusage_fn=None) -> FastAPI:
+    """judge_fn(ticket, text, ereignisse, entscheidung) -> Urteil, antwort_fn(lauf, empfehlungen) und
+    zusage_fn(lauf, kommentar) -> {text, kosten_usd, modell} sind austauschbar, damit Tests ohne LLM laufen.
+    Standard: echte API-Aufrufe."""
     load_dotenv()  # lokal: .env im Projektordner; im Container kommen die Werte direkt als Umgebungsvariablen
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     cfg = einstellungen or aus_umgebung()
@@ -108,6 +116,8 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
     judge_fn = judge_fn or (lambda ticket, text, ereignisse, entscheidung:
                             pruefung.judge(llm(), ticket, text, ereignisse, entscheidung))
     antwort_fn = antwort_fn or (lambda lauf, empfehlungen: antwort.antwort_schreiben(llm(), lauf, empfehlungen))
+    zusage_fn = zusage_fn or (lambda lauf, kommentar: antwort.ohne_zusage_schreiben(llm(), lauf, kommentar))
+    zusage_in_arbeit: set[str] = set()  # Läufe, deren Antwort ohne Zusage gerade geschrieben wird
 
     def hintergrund(coro) -> None:
         task = asyncio.create_task(coro)
@@ -173,11 +183,40 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
         if quelle == "llm":
             await pruefen(run_id, "antwort")
 
+    async def zusage_streichen(run_id: str, kommentar: str) -> None:
+        """UC6, B2: Antwort ohne die Zusage. Haiku schreibt neu; sagt auch die neue Antwort etwas zu (Code-Prüfung),
+        greift die feste Vorlage. Die Kosten des Aufrufs zählen in beiden Fällen."""
+        try:
+            lauf = speicher.lauf(run_id)
+            name = KUNDEN[lauf["kunden_id"]]["name"]
+            quelle, text, modell, kosten = "vorlage", antwort.vorlage_ohne_zusage(name, kommentar), None, 0.0
+            if not budget.stand(speicher, cfg.monatsdeckel_usd).gesperrt:
+                try:
+                    r = await asyncio.to_thread(zusage_fn, lauf, kommentar)
+                    modell, kosten = r["modell"], float(r["kosten_usd"])
+                    if pruefung.zusage_saetze(r["text"]):
+                        log.warning("Antwort ohne Zusage für %s sagt wieder etwas zu, Vorlage verwendet", run_id)
+                    else:
+                        quelle, text = "llm", r["text"]
+                except Exception:  # noqa: BLE001 – Rückfall auf die Vorlage
+                    log.exception("Antwort ohne Zusage für %s fehlgeschlagen, Vorlage verwendet", run_id)
+            speicher.antwort_speichern(run_id, text, quelle, [{"art": "zusage", "entscheidung": "gestrichen",
+                                                               "kommentar": kommentar, "entschieden": jetzt()}],
+                                       modell, kosten)
+        finally:
+            zusage_in_arbeit.discard(run_id)
+
     def kundensicht(lauf: dict, empfehlungen: list[dict], a: dict | None) -> dict:
-        """Was der Kunde im Portal sieht (Variante A)."""
+        """Was der Kunde im Portal sieht (Variante A; seit UC6 auch für Entwürfe mit Zusage ohne Empfehlung)."""
         ergebnis = lauf["ergebnis"] or {}
         if not empfehlungen:
-            return {"art": "entwurf", "text": ergebnis.get("entwurf")}
+            if not ergebnis.get("zusage_saetze"):  # fehlt bei Läufen vor UC6: Kundensicht bleibt, wie sie war
+                return {"art": "entwurf", "text": ergebnis.get("entwurf")}
+            if a:
+                return {"art": "antwort", "pruefung": "zusage", "text": a["text"], "quelle": a["quelle"],
+                        "entschieden": a["erstellt"]}
+            return {"art": "zwischenbescheid", "pruefung": "zusage",
+                    "text": antwort.zwischenbescheid_pruefung(KUNDEN[lauf["kunden_id"]]["name"])}
         if a:
             return {"art": "antwort", "text": a["text"], "quelle": a["quelle"],
                     "entschieden": max(e["entschieden"] for e in empfehlungen),
@@ -209,7 +248,8 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
         r = rolle(request)
         if r != "gast":  # Gäste sehen nur das Replay; dafür wird die Datenbank nicht angefragt
             ctx.setdefault("budget", budget.stand(speicher, cfg.monatsdeckel_usd))
-            ctx.setdefault("offene_freigaben", len(speicher.offene_empfehlungen(nur(request))))
+            ctx.setdefault("offene_freigaben", len(speicher.offene_empfehlungen(nur(request)))
+                           + len(speicher.offene_entwurfspruefungen(nur(request))))
         ctx.setdefault("budget", None)
         ctx.setdefault("offene_freigaben", 0)
         ctx.setdefault("aktiv", None)
@@ -423,7 +463,10 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
         """Am Ende gibt es drei Teile: Status-Badge (rechts oben), Kundensicht (links), Abschluss (rechts).
         konsole: nur im Replay, die Entscheidung aus der Support-Konsole als eigene Karte."""
         ctx = {"run_id": lauf["run_id"], "ergebnis": ergebnis, "empfehlungen": empfehlungen,
-               "sicht": kundensicht(lauf, empfehlungen, antwort_), "pruefungen": pruefungen, "aufzeichnung": aufzeichnung,
+               "sicht": kundensicht(lauf, empfehlungen, antwort_), "aufzeichnung": aufzeichnung,
+               "pruefungen": [{**p, "anzeige": pruefung.regeln_anzeige(p["regeln"], lauf.get("ereignisse") or [],
+                                                                       lauf["kunden_id"]) if p.get("regeln") else None}
+                              for p in pruefungen],
                "konsole": konsole}
         return {name: fragment(f"_{name}.html", **ctx) for name in ("status", "entwurf", "abschluss")}
 
@@ -488,7 +531,8 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
             lauf = speicher.lauf(run_id)
             b = Beobachter()
             BEOBACHTER[run_id] = b
-            task = asyncio.create_task(lauf_ausfuehren(run_id, lauf["absender"], lauf["text"], speicher, cfg.lauf_dir, b, query_fn))
+            task = asyncio.create_task(lauf_ausfuehren(run_id, lauf["absender"], lauf["text"], speicher, cfg.lauf_dir, b, query_fn,
+                                                         kunden_id=lauf["kunden_id"]))
             laufende_tasks.add(task)
             task.add_done_callback(laufende_tasks.discard)
             task.add_done_callback(lambda _t: agent_platz.release())  # Platz erst nach dem Lauf freigeben, nicht beim Tab-Schließen
@@ -547,15 +591,63 @@ def create_app(einstellungen: Einstellungen | None = None, query_fn: QueryFn = _
 
     # ---------- Freigaben ----------
 
+    def karte(e: dict) -> dict:
+        """Was der Mensch neben einer Empfehlung sehen muss (UC6, Automation Bias): ganzes Ticket, Absender,
+        Regelgrundlage aus dem Code und Warnungen. Die Regel wird hier neu geprüft, damit auch Altdaten auffallen."""
+        lauf = speicher.lauf(e["run_id"]) or {}
+        absender = KUNDEN.get(lauf.get("kunden_id"), {})
+        z = ZAHLUNGEN.get(e["zahlungs_id"])
+        regel = erstattung_pruefen(z, list(ZAHLUNGEN.values()), REFERENZTAG) if z else None
+        warnungen = []
+        if lauf.get("kunden_id") and e["kunden_id"] != lauf["kunden_id"]:
+            warnungen.append(f"This recommendation is for {KUNDEN[e['kunden_id']]['name']} ({e['kunden_id']}), "
+                             f"not the sender {absender.get('name')} ({lauf['kunden_id']}).")
+        if any(x.get("blockiert_art") == "fremdes_konto" for x in lauf.get("ereignisse") or []):
+            warnungen.append("In this case the agent tried to access another customer's account. The program code blocked it.")
+        if regel and not regel["erlaubt"]:
+            warnungen.append("The refund policy does not cover this payment (see rule check).")
+        return {"ticket": lauf.get("text"), "absender": absender, "absender_id": lauf.get("kunden_id"),
+                "entwurf": (lauf.get("ergebnis") or {}).get("entwurf"), "regel": regel, "warnungen": warnungen}
+
+    def markiert(text: str, saetze: list[str]) -> Markup:
+        """Entwurf mit hervorgehobenen Zusage-Sätzen. Erst maskieren, dann markieren: kein HTML aus dem Modell."""
+        html = str(escape(text))
+        for s in saetze:
+            html = html.replace(str(escape(s)), f"<mark>{escape(s)}</mark>")
+        return Markup(html)
+
     @app.get("/freigaben", response_class=HTMLResponse)
     async def freigaben(request: Request, hinweis: str | None = None):
         code = nur(request)  # Besucher mit Link: nur Empfehlungen aus eigenen Läufen
         offen = speicher.offene_empfehlungen(code)
-        entwuerfe = {e["run_id"]: ((speicher.lauf(e["run_id"]) or {}).get("ergebnis") or {}).get("entwurf") for e in offen}
-        return seite(request, "konsole.html", aktiv="konsole", offen=offen, entwuerfe=entwuerfe,
+        karten = {e["empfehlungs_id"]: karte(e) for e in offen}
+        pruefungen = [{**f, "absender_kunde": KUNDEN[f["kunden_id"]],
+                       "markiert": markiert(f["ergebnis"].get("entwurf") or "", f["ergebnis"]["zusage_saetze"])}
+                      for f in speicher.offene_entwurfspruefungen(code)]
+        return seite(request, "konsole.html", aktiv="konsole", offen=offen, karten=karten, zusage_pruefungen=pruefungen,
                      entschieden=speicher.entschiedene_empfehlungen(nur_zugang=code),
                      statistik=speicher.freigabe_statistik(code), uebergaben=speicher.uebergaben(nur_zugang=code),
                      hinweis=hinweis)
+
+    @app.post("/entwuerfe/{run_id}")
+    async def entwurf_entscheiden(request: Request, run_id: str, entscheidung: str = Form(""), begruendung: str = Form("")):
+        """UC6, B2: Entwurf mit Zusage ohne Empfehlung. freigegeben = Entwurf geht unverändert an den Kunden,
+        gestrichen = Antwort ohne die Zusage (Haiku, sonst Vorlage)."""
+        lauf = eigener_lauf(request, run_id)
+        ergebnis = (lauf or {}).get("ergebnis") or {}
+        if lauf is None or not ergebnis.get("zusage_saetze") or speicher.empfehlungen_zum_lauf(run_id):
+            return RedirectResponse("/freigaben?hinweis=unbekannt", status_code=303)
+        if entscheidung not in ("freigegeben", "gestrichen"):
+            return RedirectResponse("/freigaben?hinweis=ungueltig", status_code=303)
+        if speicher.antwort(run_id) or run_id in zusage_in_arbeit:
+            return RedirectResponse("/freigaben?hinweis=schon_entschieden", status_code=303)
+        if entscheidung == "freigegeben":
+            speicher.antwort_speichern(run_id, ergebnis["entwurf"], "entwurf", [{"art": "zusage", "entscheidung": "freigegeben",
+                                       "kommentar": "", "entschieden": jetzt()}], None, 0.0)
+        else:
+            zusage_in_arbeit.add(run_id)
+            hintergrund(zusage_streichen(run_id, begruendung[:1000]))
+        return RedirectResponse("/freigaben?hinweis=gespeichert", status_code=303)
 
     @app.post("/freigaben/{empfehlungs_id}")
     async def entscheiden(request: Request, empfehlungs_id: str, entscheidung: str = Form(""),

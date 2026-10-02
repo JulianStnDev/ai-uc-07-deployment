@@ -93,6 +93,42 @@ gcloud run deploy uc7 --source . --region europe-west3 \
 - `--concurrency 4` plus `AGENT_LAEUFE_PRO_INSTANZ=1`: bis zu vier Anfragen je Instanz (Seiten, Konsole, Live-Anzeige), aber höchstens ein Agent-Lauf. Ist der Platz belegt, zeigt die Seite „Wartet auf einen freien Platz“ (bis `AGENT_WARTEZEIT_S`). `--max-instances 2` deckelt gleichzeitige Läufe und Kosten.
 - `--timeout 600`: Ein Lauf dauert 30–45 s, die SSE-Verbindung bleibt so lange offen.
 
+## Rollback
+
+Cloud Run behält die alten Revisionen. Zurück ohne Neubau, nur den Traffic umlegen:
+```bash
+gcloud run revisions list --service uc7 --region europe-west3 --limit 5      # welche Revision lief vorher?
+gcloud run services update-traffic uc7 --region europe-west3 --to-revisions <REVISION>=100
+```
+Vor dem Schutz im Code (UC6, PR #11) lief `uc7-00008-qtl` (Commit `2c8cc86`). Das Schema ist bei diesem Schritt gleich
+geblieben, die alte Revision startet also ohne Datenbankänderung.
+
+### Falle: Rollback hinter den Schutz im Code (PR #11)
+
+Der alte Code kennt die Zusage-Prüfung nicht. Bei Läufen **ohne Erstattungsempfehlung** zeigt er dem Kunden immer den
+**Original-Entwurf des Agents**. Nach einem Rollback sähe der Kunde also wieder genau die Zusage, die die Prüfung
+zurückgehalten hat, auch wenn in der Konsole schon „Remove the promise“ gewählt wurde (die Antwort ohne Zusage liegt
+dann zwar in `antworten`, der alte Code zeigt sie bei diesen Läufen aber nicht an).
+
+Vorgehen vor einem Rollback hinter PR #11:
+1. In der Support-Konsole den Abschnitt „Promise without a recommendation“ ansehen. Jede offene Karte entscheiden.
+   Wo die Zusage falsch ist, „Remove the promise“ wählen, auch wenn der Rollback danach kommt (die Entscheidung bleibt
+   für ein späteres Vorwärts-Deploy erhalten).
+2. Betroffene Läufe notieren (lesend, als `uc7_app`):
+   ```sql
+   SELECT l.run_id, l.kunden_id, l.zugang, a.quelle
+   FROM laeufe l LEFT JOIN antworten a USING (run_id)
+   WHERE l.ergebnis LIKE '%"zusage_saetze": ["%'
+     AND NOT EXISTS (SELECT 1 FROM empfehlungen e WHERE e.run_id = l.run_id);
+   ```
+   Diese Läufe zeigen nach dem Rollback die Zusage wieder. In der Demo heißt das: Wer die Seite eines dieser Läufe
+   öffnet, sieht den alten Entwurf. Steht bei einem dieser Läufe ein persönlicher Link (`zugang`), den Link bis zum Vorwärts-Deploy
+   sperren (`python -m app.links sperren <code>`), statt die Daten zu ändern.
+3. Erst dann den Traffic umlegen. Danach so bald wie möglich wieder vorwärts deployen.
+
+Die übrigen neuen Daten sind für den alten Code harmlos: Einen von der Konto-Bindung blockierten Schritt zeigt er als
+„Blocked a tool that is not allowed“ (ungenau, aber ohne Folgen), eine Antwort mit `quelle = 'entwurf'` (freigegebener Entwurf) wie jede andere Antwort.
+
 ## Persönliche Links für Besucher
 
 Lokal gegen Neon (liest `DATABASE_URL` aus `.env`), gibt den fertigen Link aus:

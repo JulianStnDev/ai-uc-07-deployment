@@ -18,9 +18,16 @@ def fake_antwort(client, lauf, empfehlungen):
             "input_tokens": 5000, "output_tokens": 300}
 
 
+def fake_ohne_zusage(client, lauf, kommentar):
+    AUFRUFE["antwort"].append({"run_id": lauf["run_id"], "entscheidungen": ["zusage_gestrichen"]})
+    return {"text": "Hallo, eine Erstattung ist dafür nicht vorgesehen.", "kosten_usd": 0.01, "modell": "claude-haiku-4-5",
+            "input_tokens": 5000, "output_tokens": 300}
+
+
 @pytest.fixture(autouse=True)
 def kein_echter_llm_aufruf(monkeypatch):
     AUFRUFE["judge"].clear(); AUFRUFE["antwort"].clear()
+    monkeypatch.setattr("app.antwort.ohne_zusage_schreiben", fake_ohne_zusage)
     monkeypatch.setattr("app.pruefung.judge", fake_judge)
     monkeypatch.setattr("app.antwort.antwort_schreiben", fake_antwort)
     return AUFRUFE

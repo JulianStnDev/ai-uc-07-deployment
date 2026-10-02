@@ -52,9 +52,11 @@
 <div class="ergebnis-liste pruefung">
   <h3>Check of the {{ "reply draft" if p.art == "agent" else "reply after the decision" }} {{ info("pruefung", "Check") }}</h3>
   <ul>
-    {% if p.regeln %}{% set n_ok = p.regeln.values() | select | list | length %}
-    <li>Rules: {{ n_ok }} of {{ p.regeln | length }} kept
-      {% if n_ok == p.regeln | length %}<span class="badge bestaetigt">ok</span>{% else %}<span class="badge abgelehnt">violated: {{ p.regeln | dictsort | selectattr(1, "false") | map(attribute=0) | join(", ") }}</span>{% endif %}</li>
+    {% if p.regeln %}{% set a = p.anzeige %}{% set n = p.regeln | length %}
+    <li>Rules: {{ n - a.verletzt | length - a.blockiert | length }} of {{ n }} kept{% if a.blockiert %}, {{ a.blockiert | length }} blocked attempt{% endif %}
+      {% if not a.verletzt and not a.blockiert %}<span class="badge bestaetigt">ok</span>{% endif %}
+      {% if a.blockiert %}<span class="badge offen">Blocked attempt: protection worked {{ info("kontobindung", "Blocked attempt") }}</span>{% endif %}
+      {% if a.verletzt %}<span class="badge abgelehnt">violated: {{ a.verletzt | join(", ") }}</span>{% endif %}</li>
     {% endif %}
     {% if p.judge %}
     <li>No speculation {{ info("spekulation", "No speculation") }}

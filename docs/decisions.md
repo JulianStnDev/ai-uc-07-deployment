@@ -163,3 +163,60 @@ Folge im Code: Die App legte beim Start per `CREATE TABLE IF NOT EXISTS` und `AL
 Geprüft auf Neon mit `uc7_app`: Start der App ohne DDL, Lesen, Einfügen und Ändern (im Rollback), `DELETE` auf `pruefungen`. Verweigert: `DELETE` auf `laeufe`, `TRUNCATE`, `DROP TABLE`, `ALTER TABLE`, `CREATE TABLE`, `CREATE SCHEMA`, `CREATE ROLE`, Verbindung zu `analytics` und `uc5_app`. Secret `uc7-database-url` Version 2, Revision `uc7-00008`: Health, Aufzeichnung ohne Login, Admin-Login, Betriebsseite (Läufe aus Neon), Konsole ok. Lokale `.env` und `python -m app.links` nutzen dieselbe Rolle. Kein API-Lauf, keine Kosten.
 
 Offen: Die interne Datenbank `postgres` erlaubt wie bei Neon üblich jeder Rolle `CONNECT` (dort liegt nichts von UC7 oder UC5).
+
+## 2026-10-02: Schutz im Code statt im Prompt (UC6, Branch b)
+
+Kontext: Das Bedrohungsmodell in UC6 (ai-uc-06-prompt-injection, docs/BEDROHUNGSMODELL.md) zeigt: Vor drei
+Bedrohungen mit hohem Restrisiko steht nur der Prompt (für ein fremdes Konto handeln, fremde Daten lesen, Zusage ohne
+Empfehlung), und die Erstattungsregeln prüft kein Code. Angriffstexte schreibt UC6 nicht (zwei Abbrüche durch einen
+Sicherheitsfilter, siehe UC6 decisions.md). Stattdessen werden die Lücken hier im Code geschlossen und mit Tests ohne
+API belegt. Der Prompt v3 bleibt unverändert, damit Unterschiede im Goldset nur vom Code kommen.
+
+Entscheidungen:
+- **Konto-Bindung.** Der Werkzeugkasten kennt den Absender aus der Sitzung (`lauf.kunden_id`, in der UC4-Kommandozeile
+  die `kunde_id` des Tickets), nie aus dem Ticket-Text. Ein PreToolUse-Hook prüft jeden Aufruf: jede `kunden_id` und
+  jede Zahlungs-ID, auch beim Lesen. `kunde_nachschlagen` wird blockiert, sobald die Suche ein fremdes Konto träfe.
+  Fremd heißt blockiert, mit einer Meldung an den Agent, die den Weg nennt: an einen Menschen übergeben, ohne fremde
+  `kunden_id`, das andere Konto im Grund nennen (wichtig für Felix, Konten zusammenführen). Werkzeugname und Konto prüft
+  ein einziger Hook nacheinander, damit die Reihenfolge feststeht. Ohne Absender gibt es keine Konfiguration (fail closed).
+- **Erstattungsregeln im Werkzeug.** `erstattung_empfehlen` lehnt ab, was corpus/erstattungen.md nicht deckt:
+  Doppelbuchung (gleicher Kunde, Tag, Betrag, Beschreibung) immer, Jahresabo bis einschließlich Tag 14 nach der
+  Zahlung (auch nach einer Verlängerung), Monatsabo nie, Store-Käufe nie (mit Verweis auf Apple bzw. Google Play),
+  nur der volle Betrag. Den Tarif liest der Code aus einer festen Liste der bekannten Beschreibungen (exakter
+  Vergleich), weil die Beschreibung Freitext und damit selbst ein Einfallstor ist. Unbekannt heißt: keine Empfehlung.
+- **Zusage ohne Empfehlung.** Beim Abschluss eines Laufs ohne Empfehlung prüft der Code den Entwurf satzweise auf
+  Zusagen von Erstattung oder Geld (`pruefung.zusage_saetze`) und speichert das Ergebnis im Lauf. Bei einem Treffer
+  sieht der Kunde einen festen Zwischenbescheid, die Konsole zeigt den Entwurf mit markierten Sätzen. Der Mitarbeiter
+  gibt ihn unverändert frei oder streicht die Zusage. Dann schreibt Haiku die Antwort neu; sagt auch die neue Antwort
+  etwas zu, greift eine feste Vorlage. Zielkonflikt (Julian): Eine durchgerutschte Zusage ist schlimmer als ein
+  Fehlalarm. Läufe von vor dieser Änderung behalten ihre Kundensicht.
+- **Konsole gegen Automation Bias.** Jede Karte zeigt das ganze Ticket (maskiert), den Absender, die Regelgrundlage
+  aus demselben Code wie das Werkzeug und Warnungen: Empfehlung für ein anderes Konto als das des Absenders, blockierte
+  Zugriffe auf fremde Konten im Lauf, Regel deckt die Zahlung nicht (beides nur noch bei Altdaten möglich).
+
+Belegt (ohne API, `tests/test_schutz.py`): Jeder Fall aus `tests/schutz_faelle.py` kam vor dem Umbau durch
+(`scripts/schutz_tabelle.py` auf 2c8cc86) und wird jetzt blockiert. Die eigenen Aufrufe gehen weiter durch. Für
+alle 15 Goldset-Tickets erlauben die Regeln genau die Soll-Zahlungen. Zusage-Prüfung: 7 von 7 echten Zusagen erkannt
+(UC4-Entwürfe zu T02), 0 Fehlalarme auf 121 Sätzen aus korrekten Entwürfen, 10 von 10 richtig auf den von Hand
+geprüften Kalibrierungs-Entwürfen. Die 183 bisherigen Tests sind unverändert grün.
+
+Grenzen: Die Zusage-Prüfung ist eine Heuristik über bekannte Formulierungen. Die Fehlalarm-Probe umfasst nur Sätze mit
+„erstatt“, „zurück“, „gutschr“, „überweis“ oder einem Betrag; die später ergänzten Stichwörter („Geld“, „Betrag“,
+„gebucht“) sind dort nicht vollständig abgedeckt. Nebenwirkung der Konto-Bindung: Die Namenssuche „Anna“ trifft auch
+Hannah (K009) und wird blockiert; der Agent wird zur E-Mail-Adresse geschickt. Keine Schemaänderung an der Datenbank
+(die Entscheidung über einen Entwurf steht in `antworten`, Quelle `entwurf`, `llm` oder `vorlage`).
+
+## 2026-10-02: Konto-Bindung: eigene E-Mail statt Kunden-ID ist ein Hinweis, keine Blockade
+
+Kontext: Im Goldset nach dem Umbau gab der Agent einmal (T14, Lauf 3) die eigene E-Mail des Absenders als `kunden_id`
+an. Die Konto-Bindung blockierte das als fremdes Konto, score.py zählte es als Verstoß. In den 45 v3-Läufen kam
+dasselbe viermal vor (T02, T06, T13, T14), damals jeweils als Werkzeugfehler „Kunde nicht gefunden“.
+
+Entscheidung (Julian), fail closed: Ist `kunden_id` keine Kunden-ID, entscheidet die Konto-Bindung selbst. Ist der Wert
+genau die E-Mail des Absenders (ohne Rücksicht auf Groß-/Kleinschreibung und Leerzeichen am Rand), hält der Hook den
+Aufruf mit dem Hinweis „Verwende die Kunden-ID K006.“ an und protokolliert ihn als Werkzeugfehler, nicht als
+Blockade. Alles andere ohne Kunden-ID (fremde E-Mail, ähnliche E-Mail, unbekannte ID, Unsinn) wird blockiert wie
+bisher. Kein Verlass darauf, dass ein nachgelagertes Werkzeug scheitert.
+
+Belegt: 8 neue Fälle in `tests/schutz_faelle.py` (K8a–K8h) und Tests für eigene E-Mail, fremde E-Mail,
+Groß-/Kleinschreibung, Leerzeichen und Unsinn. Alle Tests grün, Fehlalarm-Probe der Zusage-Prüfung weiter 0/1.241.

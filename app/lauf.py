@@ -23,6 +23,7 @@ from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, query
 from uc4_agent import agent
 from uc4_agent.werkzeuge import Werkzeugkasten
 
+from . import pruefung
 from .speicher import Speicher
 
 log = logging.getLogger("uc7.lauf")
@@ -89,10 +90,15 @@ class WebKasten(Werkzeugkasten):
                       "ergebnis": ergebnis, "fehler": fehler, "blockiert": False})
         return ergebnis, fehler
 
-    def blockiert_protokollieren(self, werkzeug: str, eingabe: dict, grund: str) -> None:
-        super().blockiert_protokollieren(werkzeug, eingabe, grund)
+    def hinweis_protokollieren(self, werkzeug: str, eingabe: dict, text: str, art: str) -> None:
+        super().hinweis_protokollieren(werkzeug, eingabe, text, art)
         self._melden({"art": "werkzeug", "werkzeug": werkzeug, "eingabe": eingabe,
-                      "ergebnis": {"fehler": grund}, "fehler": True, "blockiert": True})
+                      "ergebnis": {"fehler": text}, "fehler": True, "blockiert": False, "hinweis": art})
+
+    def blockiert_protokollieren(self, werkzeug: str, eingabe: dict, grund: str, art: str = "werkzeug") -> None:
+        super().blockiert_protokollieren(werkzeug, eingabe, grund, art)
+        self._melden({"art": "werkzeug", "werkzeug": werkzeug, "eingabe": eingabe,
+                      "ergebnis": {"fehler": grund}, "fehler": True, "blockiert": True, "blockiert_art": art})
 
 
 # Signatur wie claude_agent_sdk.query, zusätzlich der Werkzeugkasten (für Tests ohne LLM).
@@ -113,9 +119,10 @@ def api_key() -> str:
 
 
 async def lauf_ausfuehren(run_id: str, absender: str, text: str, speicher: Speicher, lauf_dir: Path,
-                          beobachter: Beobachter, query_fn: QueryFn = _sdk_query) -> None:
+                          beobachter: Beobachter, query_fn: QueryFn = _sdk_query, kunden_id: str | None = None) -> None:
+    """kunden_id: Konto des Absenders aus der Sitzung (lauf.kunden_id), Grundlage der Konto-Bindung."""
     start = time.perf_counter()
-    kasten = WebKasten(run_id=run_id, runs_dir=lauf_dir, melden=beobachter.melden)
+    kasten = WebKasten(run_id=run_id, runs_dir=lauf_dir, melden=beobachter.melden, absender_id=kunden_id)
     eingriffe: list = []
     ergebnis_msg: ResultMessage | None = None
     status, fehlertext = "fehler", None
@@ -149,6 +156,9 @@ async def lauf_ausfuehren(run_id: str, absender: str, text: str, speicher: Speic
             "num_turns": ergebnis_msg.num_turns if ergebnis_msg else None,
             "schlusstext": ergebnis_msg.result if ergebnis_msg else None,
             "entwurf": kasten.entwurf["text"] if kasten.entwurf else None,
+            # Zusage-Prüfung (UC6, B2) einmal beim Abschluss, damit sich die Kundensicht später nicht ändert.
+            # Nur relevant ohne Empfehlung: Mit Empfehlung greift ohnehin Variante A.
+            "zusage_saetze": pruefung.zusage_saetze(kasten.entwurf["text"]) if kasten.entwurf and not kasten.empfehlungen else [],
             "empfehlungen": kasten.empfehlungen,
             "uebergaben": kasten.uebergaben,
             "kuendigungen": list(kasten.kuendigungen.values()),
